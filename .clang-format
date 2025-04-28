@@ -1,0 +1,90 @@
+Language: Cpp
+BasedOnStyle: Google
+AccessModifierOffset: -4
+AlignAfterOpenBracket: BlockIndent
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: false
+AlignTrailingComments: false
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackParameters: false
+#BinPackLongBracedList: false
+BraceWrapping: 
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: MultiLine
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+BreakBeforeBraces: Custom
+BreakConstructorInitializers: AfterColon
+BreakConstructorInitializersBeforeComma: false
+ColumnLimit: 120
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ContinuationIndentWidth: 4
+IncludeCategories: 
+  - Regex: '^<.*'
+    Priority: 1
+  - Regex: '^".*'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 3
+IncludeIsMainRegex: '([-_](test|unittest))?$'
+IndentCaseLabels: true
+IndentWidth: 4
+InsertNewlineAtEOF: true
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+NamespaceIndentation: All
+PointerAlignment: Left
+SpaceAfterCStyleCast: true
+SpaceAfterTemplateKeyword: false
+SpaceBeforeRangeBasedForLoopColon: false
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInConditionalStatement: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+TabWidth: 4
+UseTab: Always
+AlwaysBreakAfterDefinitionReturnType: None
+BreakAfterReturnType: Automatic
+AllowAllParametersOfDeclarationOnNextLine: false
+QualifierAlignment: Right
+SortIncludes: true
+BreakFunctionDefinitionParameters: false
+AllowAllArgumentsOnNextLine: false
+AllowBreakBeforeNoexceptSpecifier: Never
+FixNamespaceComments: false
+PackConstructorInitializers: Never
+SeparateDefinitionBlocks: Always
+EmptyLineBeforeAccessModifier: LogicalBlock
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+
+PenaltyReturnTypeOnItsOwnLine: 1000
+PenaltyIndentedWhitespace: 10
+PenaltyBreakOpenParenthesis: 1
+PenaltyBreakBeforeFirstCallParameter: 1
+PenaltyBreakAssignment: 30
+PenaltyBreakBeforeMemberAccess: 1000
+PenaltyBreakComment: 20
+PenaltyBreakFirstLessLess: 3
+PenaltyBreakScopeResolution: 1000
+PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 5
+PenaltyExcessCharacter: 1000
+
+Standard: c++20
+
