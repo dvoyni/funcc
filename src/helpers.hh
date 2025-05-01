@@ -1,6 +1,7 @@
 #pragma once
 
 #include <any>
+#include <cassert>
 #include <memory>
 #include <string>
 #include <typeindex>
@@ -25,7 +26,7 @@ namespace funcc {
 		T& get() const {
 			auto it = m_context.find(typeid(T));
 			if (it == m_context.end()) {
-				throw std::runtime_error("Context does not contain value of type " + std::string(typeid(T).name()));
+				throw std::exception("Context does not contain value of type " + std::string(typeid(T).name()));
 			}
 			return std::any_cast<T&>(it->second);
 		};
@@ -49,7 +50,7 @@ namespace funcc {
 			m_error{""},
 			m_value{std::make_shared<T>(args...)} {}
 
-		Result(std::string const& error, size_t position, Location const& location) :
+		Result(std::string const& error, Location const& location) :
 			m_location{std::move(location)},
 			m_error{std::move(error)},
 			m_value{} {}

@@ -31,6 +31,18 @@ namespace funcc {
 		Location(int line, int column) :
 			line(line),
 			column(column) {}
+
+		Location(Location const& other) = default;
+		Location& operator=(Location const& other) = default;
+	};
+
+	struct Range {
+		Location start;
+		Location end;
+
+		Range(Location&& start, Location const& end) :
+			start{std::move(start)},
+			end{end} {}
 	};
 
 	class IConst {

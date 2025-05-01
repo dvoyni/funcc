@@ -18,84 +18,102 @@ namespace funcc::nar {
 	};
 
 	class NarParser {
-		constexpr static std::string const KwModule{"module"};
-		constexpr static std::string const KwImport{"import"};
-		constexpr static std::string const KwAs{"as"};
-		constexpr static std::string const KwExposing{"exposing"};
-		constexpr static std::string const KwInfix{"infix"};
-		constexpr static std::string const KwAlias{"alias"};
-		constexpr static std::string const KwType{"type"};
-		constexpr static std::string const KwDef{"def"};
-		constexpr static std::string const KwHidden{"hidden"};
-		constexpr static std::string const KwNative{"native"};
-		constexpr static std::string const KwLeft{"left"};
-		constexpr static std::string const KwRight{"right"};
-		constexpr static std::string const KwNon{"non"};
-		constexpr static std::string const KwIf{"if"};
-		constexpr static std::string const KwThen{"then"};
-		constexpr static std::string const KwElse{"else"};
-		constexpr static std::string const KwLet{"let"};
-		constexpr static std::string const KwIn{"in"};
-		constexpr static std::string const KwSelect{"select"};
-		constexpr static std::string const KwCase{"case"};
-		constexpr static std::string const KwEnd{"end"};
+		constexpr static std::string_view KwModule = "module";
+		constexpr static std::string_view KwImport = "import";
+		constexpr static std::string_view KwAs = "as";
+		constexpr static std::string_view KwExposing = "exposing";
+		constexpr static std::string_view KwInfix = "infix";
+		constexpr static std::string_view KwAlias = "alias";
+		constexpr static std::string_view KwType = "type";
+		constexpr static std::string_view KwDef = "def";
+		constexpr static std::string_view KwHidden = "hidden";
+		constexpr static std::string_view KwNative = "native";
+		constexpr static std::string_view KwLeft = "left";
+		constexpr static std::string_view KwRight = "right";
+		constexpr static std::string_view KwNon = "non";
+		constexpr static std::string_view KwIf = "if";
+		constexpr static std::string_view KwThen = "then";
+		constexpr static std::string_view KwElse = "else";
+		constexpr static std::string_view KwLet = "let";
+		constexpr static std::string_view KwIn = "in";
+		constexpr static std::string_view KwSelect = "select";
+		constexpr static std::string_view KwCase = "case";
+		constexpr static std::string_view KwEnd = "end";
 
-		constexpr static std::string const SeqComment{"//"};
-		constexpr static std::string const SeqCommentStart{"/*"};
-		constexpr static std::string const SeqCommentEnd{"*/"};
-		constexpr static std::string const SeqExposingAll{"*"};
-		constexpr static std::string const SeqParenthesisOpen{"("};
-		constexpr static std::string const SeqParenthesisClose{")"};
-		constexpr static std::string const SeqBracketsOpen{"["};
-		constexpr static std::string const SeqBracketsClose{"]"};
-		constexpr static std::string const SeqBracesOpen{"{"};
-		constexpr static std::string const SeqBracesClose{"}"};
-		constexpr static std::string const SeqComma{","};
-		constexpr static std::string const SeqColon{":"};
-		constexpr static std::string const SeqEqual{"="};
-		constexpr static std::string const SeqBar{"|"};
-		constexpr static std::string const SeqUnderscore = {"_"};
-		constexpr static std::string const SeqDot{"."};
-		constexpr static std::string const SeqMinus{"-"};
-		constexpr static std::string const SeqLambda{"\\("};
-		constexpr static std::string const SeqLambdaBind{"->"};
-		constexpr static std::string const SeqCaseBind{"->"};
-		constexpr static std::string const SeqInfixChars{"!#$%&*+-/:;<=>?^|~`"};
+		constexpr static std::string_view SeqComment = "//";
+		constexpr static std::string_view SeqCommentStart = "/*";
+		constexpr static std::string_view SeqCommentEnd = "*/";
+		constexpr static std::string_view SeqExposingAll = "*";
+		constexpr static std::string_view SeqParenthesisOpen = "(";
+		constexpr static std::string_view SeqParenthesisClose = ")";
+		constexpr static std::string_view SeqBracketsOpen = "[";
+		constexpr static std::string_view SeqBracketsClose = "]";
+		constexpr static std::string_view SeqBracesOpen = "{";
+		constexpr static std::string_view SeqBracesClose = "}";
+		constexpr static std::string_view SeqComma = ",";
+		constexpr static std::string_view SeqColon = ":";
+		constexpr static std::string_view SeqEqual = "=";
+		constexpr static std::string_view SeqBar = "|";
+		constexpr static std::string_view SeqUnderscore = "_";
+		constexpr static std::string_view SeqDot = ".";
+		constexpr static std::string_view SeqMinus = "-";
+		constexpr static std::string_view SeqLambda = "\\(";
+		constexpr static std::string_view SeqLambdaBind = "->";
+		constexpr static std::string_view SeqCaseBind = "->";
+		constexpr static std::string_view SeqInfixChars = "!#$%&*+-/:;<=>?^|~`";
 
-		constexpr static std::string const SmbNewLine{"\n"};
-		constexpr static std::string const SmbQuoteString{"\""};
-		constexpr static std::string const SmbQuoteChar{"'"};
-		constexpr static std::string const SmbEscape{"\\"};
+		constexpr static std::string_view SmbNewLine = "\n";
+		constexpr static std::string_view SmbQuoteString = "\"";
+		constexpr static std::string_view SmbQuoteChar = "'";
+		constexpr static std::string_view SmbEscape = "\\";
 
-		std::string m_input;
+		inline static Parser<void> SkipOneLineComment(ParserFactory& pf) {
+			return pf.All<void>(
+				pf.Discard<void, void>(),
+				pf.Exact(SeqComment),
+				pf.Some([](std::string_view const&, char32_t c) { return c != '\n'; })
+			);
+		}
+
+		inline static Parser<void> SkipMultilineComment(ParserFactory& pf) {
+			return pf.All<void>(
+				pf.Discard<void, void>(),
+				pf.Exact(SeqCommentStart),
+				pf.Some([](std::string_view const& v, char32_t c) { return !v.ends_with(SeqCommentEnd); })
+			);
+		}
+
+		inline static Parser<void> SkipComment(ParserFactory& pf) {
+			return pf.OneOf<void>(SkipOneLineComment(pf), SkipMultilineComment(pf), pf.NoopSuccess());
+		}
+
+		inline static File ConstructFile(
+			Result<void>,
+			Result<void>,
+			Result<Token> moduleName,
+			Result<void>,
+			Result<void>
+		) {}
+
+		inline static Parser<Token> QualifiedIdentifier(ParserFactory& pf) {
+			return pf.Some<Token>(
+				[](Token const& token) { return Result<Token>(token); },
+				[](std::string_view const& acc, char32_t next) {
+					return std::isalnum(static_cast<char>(next), std::locale::classic()) || next == '.';
+				}
+			);
+		}
 
 	public:
-		NarParser(std::string input) :
-			m_input{input} {}
-
-		Result<IParsedFile> Parse() const {
-			Parser parser{m_input};
-		}
-
-		[[nodiscard]] std::string const& GetInput() const {
-			return m_input;
-		}
-
-	private:
-		inline static void SkipComment(Parser parser) {
-			while (parser.OneOf<void>([](Parser& parser) -> Result<void> {
-				return parser.All<void, std::string_view, void>(
-					[](Result<std::string_view>, Result<void>) -> Result<void> { return Result<void>{}; },
-					[](Parser& parser) -> Result<std::string_view> { return parser.Exact(SeqComment); },
-					[](Parser& parser) -> Result<void> {
-						return parser.Read<void>(
-							[](std::string_view, char32_t c) { return c != '\n'; },
-							[](std::string_view) { return Result<void>(); }
-						);
-					}
-				);
-			}))
-			{};
+		inline static Parser<File> Create(ParserFactory& pf) {
+			return pf.All<File>(
+				ConstructFile,
+				SkipComment(pf),
+				pf.Exact(KwModule),
+				QualifiedIdentifier(pf),
+				SkipComment(pf),
+				pf.ExactEof()
+			);
 		}
 	};
 }

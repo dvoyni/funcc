@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <format>
 #include <functional>
@@ -11,8 +12,17 @@
 #include "ast_common.hh"
 
 namespace funcc {
+	class ParserFactory;
 
-	class Parser final {
+	template<typename T>
+	using Parser = std::function<Result<T>(ParserFactory&)>;
+
+	struct Token {
+		std::string_view str;
+		Range range;
+	};
+
+	class ParserFactory final {
 		std::string m_input;
 		size_t m_position;
 		Location m_location;
@@ -20,171 +30,100 @@ namespace funcc {
 		std::function<bool(char32_t)> m_isWhitespace;
 
 	public:
-		Parser(std::string const& input, std::function<bool(char32_t)> const& isWhitespace = &DefaultIsWhitespace) :
+		ParserFactory(
+			std::string const& input,
+			std::function<bool(char32_t)> const& isWhitespace = &DefaultIsWhitespace
+		) :
 			m_input{input},
 			m_position{0},
 			m_location{1, 1},
 			m_isWhitespace{isWhitespace} {}
 
-		using ReadPredicate = std::function<bool(std::string_view acc, char32_t next)>;
+		template<typename T>
+		using ResultConstructorFn = std::function<Result<T>(Token const& token)>;
+
+		using PredicateFn = std::function<bool(std::string_view const& acc, char32_t next)>;
 
 		template<typename T>
-		using MapFn = std::function<Result<T>(std::string_view token)>;
-
-		template<typename T>
-		Result<T> Read(ReadPredicate const& shouldAppend, MapFn<T> const& map, bool skipLeadingWhitespace = true) {
-			Push();
-			if (skipLeadingWhitespace) {
-				SkipWhitespace();
-			}
-			std::string token = Read(shouldAppend);
-			Result<T> result = map(token);
-			if (!result) {
-				Pop();
-			}
-			return result;
-		}
-
-		Result<std::string_view> Exact(
-			std::string const& str,
-			std::string error = "",
+		Parser<T> Some(
+			ResultConstructorFn<T> const& ctor,
+			PredicateFn const& shouldAppend,
 			bool skipLeadingWhitespace = true
 		) {
-			Push();
-			if (skipLeadingWhitespace) {
-				SkipWhitespace();
-			}
-			for (char c: str) {
-				if (m_position >= m_input.size()) {
-					Pop();
-					return ErrorHere<std::string_view>(error);
-				}
-				if (m_input[m_position] != c) {
-					Pop();
-					return ErrorHere<std::string_view>(error);
-				}
-				StepForward();
-			}
-			return Result<std::string_view>(std::string_view{m_input.data() + m_position - str.size(), str.size()});
+			return [&ctor, &shouldAppend, skipLeadingWhitespace](ParserFactory& pf) {
+				return pf.ReadSome<T>(ctor, shouldAppend, skipLeadingWhitespace);
+			};
+		}
+
+		Parser<void> Some(PredicateFn const& shouldAppend, bool skipLeadingWhitespace = true) {
+			return Some<void>(Discard(), shouldAppend, skipLeadingWhitespace);
 		}
 
 		template<typename T>
-		using ReadFn = std::function<Result<T>(Parser& parser)>;
-
-		template<typename T>
-		Result<T> OneOf(Result<T> furthestResult, ReadFn<T> const& head, ReadFn<T> const& rest...) {
-			Result<T> result = head(*this);
-		}
-
-		template<typename T>
-		Result<T> OneOf(ReadFn<T> const& readFns...) {
-			Result<T> furthestResult{};
-			for (ReadFn<T> const& readFn: readFns) {
-				Push();
-				Result<T> result = readFn(*this);
-				if (result) {
-					return result;
-				} else {
-					if (furthestResult < result) {
-						furthestResult = result;
-					}
-				}
-				Pop();
-			}
-			return furthestResult;
-		}
-
-		template<typename T, typename... Args>
-		using BuildFn = std::function<Result<T>(Result<Args>...)>;
-
-		template<typename T, typename... Args>
-		Result<T> All(BuildFn<T, Args...> const& build, ReadFn<Args>... read) {
-			Push();
-			std::tuple results{read(*this)...};
-			bool hasError = false;
-			std::apply([&hasError](auto&&... args) { ((hasError |= args), ...); }, results);
-			if (hasError) {
-				Pop();
-				return ErrorHere<T>(std::format("Expected all arguments here"));
-			}
-			return std::apply(build, results);
-		}
-
-		/*template<typename T, typename I>
-		using ConsFn = std::function<Result<T>(std::vector<I> const&& items)>;
-
-		template<typename T, typename I>
-		Result<T> FewOf(
-			std::string const& separator,
-			ReadFn<I> const& readFn,
-			JoinFn<T, I> const& joinFn,
-			std::string const& begin = "",
-			std::string const& end = "",
-			bool skipWhitespace = true
+		Parser<T> Exact(
+			ResultConstructorFn<T> const& ctor,
+			std::string_view const& str,
+			bool skipLeadingWhitespace = true
 		) {
-			std::vector<I> items;
-			Push();
-			Result<std::string_view> beginResult =
-				Exact(begin, std::format("Expected `{}` here", begin), skipWhitespace);
-			if (!beginResult) {
-				return beginResult;
-			}
+			return [&ctor, &str, skipLeadingWhitespace](ParserFactory& pf) {
+				return pf.ReadExact<T>(ctor, str, skipLeadingWhitespace);
+			};
+		}
 
-			bool expectingEnd = false;
-			Result<std::string_view> separatorResult;
+		Parser<void> Exact(std::string_view const& str, bool skipLeadingWhitespace = true) {
+			return Exact<void>(Discard(), str, skipLeadingWhitespace);
+		}
 
-			while (true) {
-				Result<std::string_view> endResult = Exact(end, "", skipWhitespace);
-				if (endResult) {
-					break;
-				} else if (expectingEnd) {
-					Result<T> error = ErrorHere<T>(std::format("Expected `{}` or `{}` here", separator, end));
-					Pop();
-					return error;
+		Parser<void> ExactEof(bool skipLeadingWhitespace = true) {
+			return [skipLeadingWhitespace](ParserFactory& pf) {
+				pf.Push();
+				if (skipLeadingWhitespace) {
+					pf.SkipWhitespace();
 				}
-
-				Result<I> itemResult = readFn(*this);
-				if (!itemResult) {
-					Pop();
-					return itemResult;
+				if (pf.m_position >= pf.m_input.size()) {
+					return Result<void>{};
 				}
-				items.push_back(itemResult.GetValue());
+				pf.Pop();
+				return pf.ErrorHere<void>("Expected EOF, but found more input.");
+			};
+		}
 
-				separatorResult = Exact(separator, "", skipWhitespace);
+		template<typename T, typename... Parsers>
+		Parser<T> OneOf(Parsers... parsers) {
+			return [parsers...](ParserFactory& pf) { return pf.ReadOneOf<T, Parsers...>(parsers...); };
+		}
 
-				if (!separatorResult) {
-					expectingEnd = true;
-					break;
-				}
-			}
+		template<typename T, typename CombineFn, typename... Parsers>
+		Parser<T> All(CombineFn const& combine, Parsers... parser) {
+			return [&combine, parser...](ParserFactory& pf) {
+				return pf.ReadAll<T, CombineFn, Parsers...>(combine, parser...);
+			};
+		}
 
-			if (separatorResult && items.empty()) {
-				Result<T> error = ErrorHere<T>(std::format("Did not expect `{}` here", separator));
-				Pop();
-				return error;
-			}
+		template<typename... Args>
+		std::function<Result<void>(Result<Args>...)> Discard() {
+			return [](Result<Args>...) { return Result<void>{}; };
+		}
 
-			Result<T> result = joinFn(std::move(items));
-			if (!result) {
-				Pop();
-			}
-			return result;
-		}*/
+		std::function<Result<void>(Token const&)> Discard() {
+			return [](Token const&) { return Result<void>{}; };
+		}
+
+		Parser<void> NoopSuccess() {
+			return [](ParserFactory& pf) { return Result<void>{}; };
+		}
 
 		void Push() {
 			m_stack.push_back(std::tuple(m_position, m_location));
 		}
 
 		void Pop() {
-			auto [position, location] = m_stack.back();
-			m_stack.pop_back();
-			m_position = position;
-			m_location = location;
+			std::tie(m_position, m_location) = m_stack.back();
 		}
 
 		template<typename T>
 		Result<T> ErrorHere(std::string const& error) {
-			return Result<T>(error, m_position, m_location);
+			return Result<T>(error, m_location);
 		}
 
 	private:
@@ -197,36 +136,28 @@ namespace funcc {
 			return 0;
 		}
 
-		void AppendChar(std::string& to) {
-			char32_t c;
-			size_t length;
-			if (Peek(c, length)) {
-				for (size_t i = 0; i < length; ++i) {
-					to += m_input[m_position];
-					StepForward();
-				}
-			}
-		}
-
-		std::string Read(ReadPredicate const& shouldAppend) {
-			std::string result;
+		Token Read(PredicateFn const& shouldAppend) {
+			Location start = m_location;
+			std::string_view result;
 			char32_t c;
 			size_t length;
 			while (Peek(c, length)) {
 				if (shouldAppend(result, c)) {
-					AppendChar(result);
+					StepForward(length);
 				}
 			}
-			return result;
+			return Token{result, Range(std::move(start), m_location)};
 		}
 
-		void StepForward() {
-			if (m_input[m_position] == '\n') {
-				m_location.line++;
-				m_location.column = 0;
+		void StepForward(size_t length) {
+			for (size_t i = 0; i < length; ++i) {
+				if (m_input[m_position] == '\n') {
+					m_location.line++;
+					m_location.column = 0;
+				}
+				m_position++;
+				m_location.column++;
 			}
-			m_position++;
-			m_location.column++;
 		}
 
 		bool Peek(char32_t& outChar, size_t& outLength) {
@@ -255,16 +186,92 @@ namespace funcc {
 			return true;
 		}
 
-		bool IsWhitespace(std::string_view acc, char32_t next) {
+		bool IsWhitespace(std::string_view const& acc, char32_t next) {
 			return m_isWhitespace(next);
 		}
 
 		void SkipWhitespace() {
-			Read([this](std::string_view acc, char32_t next) { return m_isWhitespace(next); });
+			Read([this](std::string_view const& acc, char32_t next) { return m_isWhitespace(next); });
 		}
 
 		inline static bool DefaultIsWhitespace(char32_t c) {
 			return std::isspace(static_cast<char>(c), std::locale::classic());
+		}
+
+		template<typename T>
+		Result<T> ReadSome(
+			ResultConstructorFn<T> const& ctor,
+			PredicateFn const& shouldAppend,
+			bool skipLeadingWhitespace = true
+		) {
+			Push();
+			if (skipLeadingWhitespace) {
+				SkipWhitespace();
+			}
+			Token token = Read(shouldAppend);
+			Result<T> result = ctor(token);
+			if (!result) {
+				Pop();
+			}
+			return result;
+		}
+
+		template<typename T>
+		Result<T> ReadExact(
+			ResultConstructorFn<T> const& ctor,
+			std::string_view const& str,
+			bool skipLeadingWhitespace = true
+		) {
+			Location start = m_location;
+			Push();
+			if (skipLeadingWhitespace) {
+				SkipWhitespace();
+			}
+			Result<T> result;
+			for (char c: str) {
+				if (m_position >= m_input.size() || m_input[m_position] != c) {
+					Pop();
+					return ErrorHere<T>(std::format("Expected '{}' here", str));
+				}
+				StepForward(1);
+			}
+			return ctor(Token{str, Range{std::move(start), m_location}});
+		}
+
+		template<typename T, typename... Parsers>
+		Result<T> ReadOneOf(Parsers... parsers) {
+			return ReadOneOfReq(Result<T>{}, parsers...);
+		}
+
+		template<typename T>
+		Result<T> ReadOneOfReq(Result<T> furthestResult) {
+			return furthestResult;
+		}
+
+		template<typename T, typename TParser, typename... Parsers>
+		Result<T> ReadOneOfReq(Result<T> furthestResult, TParser head, Parsers... parsers) {
+			Push();
+			Result<T> result = head(*this);
+			if (result) {
+				return result;
+			} else {
+				Pop();
+				return ReadOneOfReq(result > furthestResult ? result : furthestResult, parsers...);
+			}
+		}
+
+		template<typename T, typename CombineFn, typename... Parsers>
+		Result<T> ReadAll(CombineFn const& combine, Parsers... parsers) {
+			Push();
+			auto results = std::make_tuple(parsers(*this)...);
+			Result<T> result;
+			std::apply([&result](auto&&... r) { (((!r && result < r) ? (result = r) : r), ...); }, results);
+			if (!result) {
+				Pop();
+			} else {
+				result = std::apply(combine, results);
+			}
+			return result;
 		}
 	};
 }
