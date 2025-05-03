@@ -25,10 +25,14 @@ namespace funcc {
 	using FullIdentifier = std::string;
 
 	struct Location {
-		int line;
-		int column;
+		size_t position;
+		size_t line;
+		size_t column;
 
-		Location(int line, int column) :
+		Location() = default;
+
+		Location(size_t position, size_t line, size_t column) :
+			position(position),
 			line(line),
 			column(column) {}
 
@@ -40,8 +44,14 @@ namespace funcc {
 		Location start;
 		Location end;
 
-		Range(Location&& start, Location const& end) :
-			start{std::move(start)},
+		Range() = default;
+
+		explicit Range(Location const& start) :
+			start{start},
+			end{start} {}
+
+		Range(Location const& start, Location const& end) :
+			start{start},
 			end{end} {}
 	};
 

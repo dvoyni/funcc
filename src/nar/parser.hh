@@ -67,53 +67,53 @@ namespace funcc::nar {
 		constexpr static std::string_view SmbQuoteChar = "'";
 		constexpr static std::string_view SmbEscape = "\\";
 
-		inline static Parser<void> SkipOneLineComment(ParserFactory& pf) {
-			return pf.All<void>(
-				pf.Discard<void, void>(),
-				pf.Exact(SeqComment),
-				pf.Some([](std::string_view const&, char32_t c) { return c != '\n'; })
-			);
-		}
+		// 	inline static Parser<void> SkipOneLineComment(ParserFactory& pf) {
+		// 		return pf.All<void>(
+		// 			pf.Discard<void, void>(),
+		// 			pf.Exact(SeqComment),
+		// 			pf.Some([](std::string_view const&, char32_t c) { return c != '\n'; })
+		// 		);
+		// 	}
 
-		inline static Parser<void> SkipMultilineComment(ParserFactory& pf) {
-			return pf.All<void>(
-				pf.Discard<void, void>(),
-				pf.Exact(SeqCommentStart),
-				pf.Some([](std::string_view const& v, char32_t c) { return !v.ends_with(SeqCommentEnd); })
-			);
-		}
+		// 	inline static Parser<void> SkipMultilineComment(ParserFactory& pf) {
+		// 		return pf.All<void>(
+		// 			pf.Discard<void, void>(),
+		// 			pf.Exact(SeqCommentStart),
+		// 			pf.Some([](std::string_view const& v, char32_t c) { return !v.ends_with(SeqCommentEnd); })
+		// 		);
+		// 	}
 
-		inline static Parser<void> SkipComment(ParserFactory& pf) {
-			return pf.OneOf<void>(SkipOneLineComment(pf), SkipMultilineComment(pf), pf.NoopSuccess());
-		}
+		// 	inline static Parser<void> SkipComment(ParserFactory& pf) {
+		// 		return pf.OneOf<void>(SkipOneLineComment(pf), SkipMultilineComment(pf), pf.NoopSuccess());
+		// 	}
 
-		inline static File ConstructFile(
-			Result<void>,
-			Result<void>,
-			Result<Token> moduleName,
-			Result<void>,
-			Result<void>
-		) {}
+		// 	inline static File ConstructFile(
+		// 		Result<void>,
+		// 		Result<void>,
+		// 		Result<Token> moduleName,
+		// 		Result<void>,
+		// 		Result<void>
+		// 	) {}
 
-		inline static Parser<Token> QualifiedIdentifier(ParserFactory& pf) {
-			return pf.Some<Token>(
-				[](Token const& token) { return Result<Token>(token); },
-				[](std::string_view const& acc, char32_t next) {
-					return std::isalnum(static_cast<char>(next), std::locale::classic()) || next == '.';
-				}
-			);
-		}
+		// 	inline static Parser<Token> QualifiedIdentifier(ParserFactory& pf) {
+		// 		return pf.Some<Token>(
+		// 			[](Token const& token) { return Result<Token>(token); },
+		// 			[](std::string_view const& acc, char32_t next) {
+		// 				return std::isalnum(static_cast<char>(next), std::locale::classic()) || next == '.';
+		// 			}
+		// 		);
+		// 	}
 
-	public:
-		inline static Parser<File> Create(ParserFactory& pf) {
-			return pf.All<File>(
-				ConstructFile,
-				SkipComment(pf),
-				pf.Exact(KwModule),
-				QualifiedIdentifier(pf),
-				SkipComment(pf),
-				pf.ExactEof()
-			);
-		}
+		// public:
+		// 	inline static Parser<File> Create(ParserFactory& pf) {
+		// 		return pf.All<File>(
+		// 			ConstructFile,
+		// 			SkipComment(pf),
+		// 			pf.Exact(KwModule),
+		// 			QualifiedIdentifier(pf),
+		// 			SkipComment(pf),
+		// 			pf.ExactEof()
+		// 		);
+		// 	}
 	};
 }
