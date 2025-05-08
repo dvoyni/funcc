@@ -2,26 +2,21 @@
 
 #include <vector>
 
-#include "ast.hh"
+#include "ast_common.hh"
 
 namespace funcc::nar {
 
 	class ExpressionAccess final : public IExpression {
 		std::unique_ptr<IExpression> m_record;
 		Identifier m_fieldName;
-		Location m_fieldNameLocation;
+		Range m_fieldNameRange;
 
 	public:
-		ExpressionAccess(
-			Location location,
-			std::unique_ptr<IExpression> record,
-			Identifier fieldName,
-			Location fieldNameLocation
-		) :
-			IExpression(location),
+		ExpressionAccess(Range range, std::unique_ptr<IExpression> record, Identifier fieldName, Range fieldNameRange) :
+			IExpression(std::move(range)),
 			m_record(std::move(record)),
 			m_fieldName(std::move(fieldName)),
-			m_fieldNameLocation(fieldNameLocation) {}
+			m_fieldNameRange(std::move(fieldNameRange)) {}
 
 		~ExpressionAccess() override = default;
 
@@ -33,8 +28,8 @@ namespace funcc::nar {
 			return m_fieldName;
 		}
 
-		[[nodiscard]] Location const& GetFieldNameLocation() const {
-			return m_fieldNameLocation;
+		[[nodiscard]] Range const& GetFieldNameRange() const {
+			return m_fieldNameRange;
 		}
 	};
 
@@ -42,8 +37,8 @@ namespace funcc::nar {
 		std::unique_ptr<IExpression> m_fieldName;
 
 	public:
-		ExpressionAccessor(Location location, std::unique_ptr<IExpression> fieldName) :
-			IExpression(location),
+		ExpressionAccessor(Range range, std::unique_ptr<IExpression> fieldName) :
+			IExpression(std::move(range)),
 			m_fieldName(std::move(fieldName)) {}
 
 		~ExpressionAccessor() override = default;
@@ -59,11 +54,11 @@ namespace funcc::nar {
 
 	public:
 		ExpressionApply(
-			Location location,
+			Range range,
 			std::unique_ptr<IExpression> function,
 			std::vector<std::unique_ptr<IExpression>>&& args
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_function(std::move(function)),
 			m_args(std::move(args)) {}
 
@@ -90,8 +85,8 @@ namespace funcc::nar {
 		bool m_inParentheses;
 
 	public:
-		ExpressionBinOp(Location location, std::vector<Operand>&& operands, bool inParentheses) :
-			IExpression(location),
+		ExpressionBinOp(Range range, std::vector<Operand>&& operands, bool inParentheses) :
+			IExpression(std::move(range)),
 			m_operands(std::move(operands)),
 			m_inParentheses(inParentheses) {}
 
@@ -108,19 +103,19 @@ namespace funcc::nar {
 
 	class ExpressionCall final : public IExpression {
 		FullIdentifier m_name;
-		Location m_nameLocation;
+		Range m_nameRange;
 		std::vector<std::unique_ptr<IExpression>> m_args;
 
 	public:
 		ExpressionCall(
-			Location location,
+			Range range,
 			FullIdentifier name,
-			Location nameLocation,
+			Range nameRange,
 			std::vector<std::unique_ptr<IExpression>>&& args
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_name(std::move(name)),
-			m_nameLocation(nameLocation),
+			m_nameRange(std::move(nameRange)),
 			m_args(std::move(args)) {}
 
 		~ExpressionCall() override = default;
@@ -129,8 +124,8 @@ namespace funcc::nar {
 			return m_name;
 		}
 
-		[[nodiscard]] Location const& GetNameLocation() const {
-			return m_nameLocation;
+		[[nodiscard]] Range const& GetNameRange() const {
+			return m_nameRange;
 		}
 
 		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetArgs() const {
@@ -142,8 +137,8 @@ namespace funcc::nar {
 		std::shared_ptr<IConst> m_value;
 
 	public:
-		ExpressionConst(Location location, std::shared_ptr<IConst> value) :
-			IExpression(location),
+		ExpressionConst(Range range, std::shared_ptr<IConst> value) :
+			IExpression(std::move(range)),
 			m_value(std::move(value)) {}
 
 		~ExpressionConst() override = default;
@@ -157,23 +152,23 @@ namespace funcc::nar {
 		QualifiedIdentifier m_module;
 		Identifier m_data;
 		Identifier m_option;
-		Location m_nameLocation;
+		Range m_nameRange;
 		std::vector<std::unique_ptr<IExpression>> m_args;
 
 	public:
 		ExpressionConstructor(
-			Location location,
+			Range range,
 			QualifiedIdentifier module,
 			Identifier data,
 			Identifier option,
-			Location nameLocation,
+			Range nameRange,
 			std::vector<std::unique_ptr<IExpression>>&& args
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_module(std::move(module)),
 			m_data(std::move(data)),
 			m_option(std::move(option)),
-			m_nameLocation(nameLocation),
+			m_nameRange(std::move(nameRange)),
 			m_args(std::move(args)) {}
 
 		~ExpressionConstructor() override = default;
@@ -190,8 +185,8 @@ namespace funcc::nar {
 			return m_option;
 		}
 
-		[[nodiscard]] Location const& GetNameLocation() const {
-			return m_nameLocation;
+		[[nodiscard]] Range const& GetNameRange() const {
+			return m_nameRange;
 		}
 
 		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetArgs() const {
@@ -201,7 +196,7 @@ namespace funcc::nar {
 
 	class ExpressionLetFunction final : public IExpression {
 		Identifier m_name;
-		Location m_nameLocation;
+		Range m_nameRange;
 		std::vector<std::unique_ptr<IPattern>> m_params;
 		std::unique_ptr<IExpression> m_body;
 		std::unique_ptr<IType> m_type;
@@ -209,17 +204,17 @@ namespace funcc::nar {
 
 	public:
 		ExpressionLetFunction(
-			Location location,
+			Range range,
 			Identifier name,
-			Location nameLocation,
+			Range nameRange,
 			std::vector<std::unique_ptr<IPattern>>&& params,
 			std::unique_ptr<IExpression> body,
 			std::unique_ptr<IType> type,
 			std::unique_ptr<IExpression> nested
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_name(std::move(name)),
-			m_nameLocation(nameLocation),
+			m_nameRange(std::move(nameRange)),
 			m_params(std::move(params)),
 			m_body(std::move(body)),
 			m_type(std::move(type)),
@@ -231,8 +226,8 @@ namespace funcc::nar {
 			return m_name;
 		}
 
-		[[nodiscard]] Location const& GetNameLocation() const {
-			return m_nameLocation;
+		[[nodiscard]] Range const& GetNameRange() const {
+			return m_nameRange;
 		}
 
 		[[nodiscard]] std::vector<std::unique_ptr<IPattern>> const& GetParams() const {
@@ -259,12 +254,12 @@ namespace funcc::nar {
 
 	public:
 		ExpressionIf(
-			Location location,
+			Range range,
 			std::unique_ptr<IExpression> condition,
 			std::unique_ptr<IExpression> trueBranch,
 			std::unique_ptr<IExpression> falseBranch
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_condition(std::move(condition)),
 			m_trueBranch(std::move(trueBranch)),
 			m_falseBranch(std::move(falseBranch)) {}
@@ -288,8 +283,8 @@ namespace funcc::nar {
 		InfixIdentifier m_infix;
 
 	public:
-		ExpressionIfixVar(Location location, InfixIdentifier infix) :
-			IExpression(location),
+		ExpressionIfixVar(Range range, InfixIdentifier infix) :
+			IExpression(std::move(range)),
 			m_infix(std::move(infix)) {}
 
 		~ExpressionIfixVar() override = default;
@@ -306,12 +301,12 @@ namespace funcc::nar {
 
 	public:
 		ExpressionLambda(
-			Location location,
+			Range range,
 			std::vector<std::unique_ptr<IPattern>>&& params,
 			std::unique_ptr<IExpression> body,
 			std::unique_ptr<IType> returnType
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_params(std::move(params)),
 			m_body(std::move(body)),
 			m_returnType(std::move(returnType)) {}
@@ -338,12 +333,12 @@ namespace funcc::nar {
 
 	public:
 		ExpressionLetVar(
-			Location location,
+			Range range,
 			std::unique_ptr<IPattern> pattern,
 			std::unique_ptr<IExpression> value,
 			std::unique_ptr<IExpression> nested
 		) :
-			IExpression(location),
+			IExpression(std::move(range)),
 			m_pattern(std::move(pattern)),
 			m_value(std::move(value)),
 			m_nested(std::move(nested)) {}
@@ -367,8 +362,8 @@ namespace funcc::nar {
 		std::vector<std::unique_ptr<IExpression>> m_expressions;
 
 	public:
-		ExpressionList(Location location, std::vector<std::unique_ptr<IExpression>>&& expressions) :
-			IExpression(location),
+		ExpressionList(Range range, std::vector<std::unique_ptr<IExpression>>&& expressions) :
+			IExpression(std::move(range)),
 			m_expressions(std::move(expressions)) {}
 
 		~ExpressionList() override = default;
@@ -382,8 +377,8 @@ namespace funcc::nar {
 		std::unique_ptr<IExpression> m_expression;
 
 	public:
-		ExpressionNegate(Location location, std::unique_ptr<IExpression> expression) :
-			IExpression(location),
+		ExpressionNegate(Range range, std::unique_ptr<IExpression> expression) :
+			IExpression(std::move(range)),
 			m_expression(std::move(expression)) {}
 
 		~ExpressionNegate() override = default;
@@ -397,7 +392,7 @@ namespace funcc::nar {
 	public:
 		struct Field {
 			Identifier name;
-			Location nameLocation;
+			Range nameRange;
 			std::unique_ptr<IExpression> value;
 		};
 
@@ -405,8 +400,8 @@ namespace funcc::nar {
 		std::vector<Field> m_fields;
 
 	public:
-		ExpressionRecord(Location location, std::vector<Field>&& fields) :
-			IExpression(location),
+		ExpressionRecord(Range range, std::vector<Field>&& fields) :
+			IExpression(std::move(range)),
 			m_fields(std::move(fields)) {}
 
 		~ExpressionRecord() override = default;
@@ -419,7 +414,7 @@ namespace funcc::nar {
 	class ExpressionSelector final : public IExpression {
 	public:
 		struct Case {
-			Location location;
+			Range range;
 			std::unique_ptr<IPattern> pattern;
 			std::unique_ptr<IExpression> expression;
 		};
@@ -430,8 +425,8 @@ namespace funcc::nar {
 		std::vector<Case> m_cases;
 
 	public:
-		ExpressionSelector(Location location, std::unique_ptr<IExpression> condition, std::vector<Case>&& cases) :
-			IExpression(location),
+		ExpressionSelector(Range range, std::unique_ptr<IExpression> condition, std::vector<Case>&& cases) :
+			IExpression(std::move(range)),
 			m_condition(std::move(condition)),
 			m_cases(std::move(cases)) {}
 
@@ -450,8 +445,8 @@ namespace funcc::nar {
 		std::vector<std::unique_ptr<IExpression>> m_expressions;
 
 	public:
-		ExpressionTuple(Location location, std::vector<std::unique_ptr<IExpression>>&& expressions) :
-			IExpression(location),
+		ExpressionTuple(Range range, std::vector<std::unique_ptr<IExpression>>&& expressions) :
+			IExpression(std::move(range)),
 			m_expressions(std::move(expressions)) {}
 
 		~ExpressionTuple() override = default;
@@ -464,9 +459,9 @@ namespace funcc::nar {
 	class ExpressionUpdate final : public IExpression {
 	public:
 		struct Field {
-			Location location;
+			Range range;
 			Identifier name;
-			Location nameLocation;
+			Range nameRange;
 			std::unique_ptr<IExpression> value;
 		};
 
@@ -475,8 +470,8 @@ namespace funcc::nar {
 		std::vector<Field> m_fields;
 
 	public:
-		ExpressionUpdate(Location location, std::unique_ptr<IExpression> record, std::vector<Field>&& fields) :
-			IExpression(location),
+		ExpressionUpdate(Range range, std::unique_ptr<IExpression> record, std::vector<Field>&& fields) :
+			IExpression(std::move(range)),
 			m_record(std::move(record)),
 			m_fields(std::move(fields)) {}
 
@@ -495,8 +490,8 @@ namespace funcc::nar {
 		QualifiedIdentifier m_name;
 
 	public:
-		ExpressionVar(Location location, QualifiedIdentifier name) :
-			IExpression(location),
+		ExpressionVar(Range range, QualifiedIdentifier name) :
+			IExpression(std::move(range)),
 			m_name(std::move(name)) {}
 
 		~ExpressionVar() override = default;

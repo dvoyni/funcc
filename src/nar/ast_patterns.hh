@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ast.hh"
+#include "ast_common.hh"
 
 namespace funcc::nar {
 	class PatternAlias final : public IPattern {
@@ -8,13 +8,8 @@ namespace funcc::nar {
 		std::unique_ptr<IPattern> m_nested;
 
 	public:
-		PatternAlias(
-			Location location,
-			std::unique_ptr<IType> type,
-			Identifier name,
-			std::unique_ptr<IPattern> nested
-		) :
-			IPattern(location, std::move(type)),
+		PatternAlias(Range range, std::unique_ptr<IType> type, Identifier name, std::unique_ptr<IPattern> nested) :
+			IPattern(range, std::move(type)),
 			m_name(std::move(name)),
 			m_nested(std::move(nested)) {}
 
@@ -31,8 +26,8 @@ namespace funcc::nar {
 
 	class PatternAny final : public IPattern {
 	public:
-		PatternAny(Location location, std::unique_ptr<IType> type) :
-			IPattern(location, std::move(type)) {}
+		PatternAny(Range range, std::unique_ptr<IType> type) :
+			IPattern(range, std::move(type)) {}
 
 		~PatternAny() override = default;
 
@@ -47,12 +42,12 @@ namespace funcc::nar {
 
 	public:
 		PatternCons(
-			Location location,
+			Range range,
 			std::unique_ptr<IType> type,
 			std::unique_ptr<IPattern> head,
 			std::unique_ptr<IPattern> tail
 		) :
-			IPattern(location, std::move(type)),
+			IPattern(range, std::move(type)),
 			m_head(std::move(head)),
 			m_tail(std::move(tail)) {}
 
@@ -71,8 +66,8 @@ namespace funcc::nar {
 		std::shared_ptr<IConst> m_value;
 
 	public:
-		PatternConst(Location location, std::unique_ptr<IType> type, std::shared_ptr<IConst> value) :
-			IPattern(location, std::move(type)),
+		PatternConst(Range range, std::unique_ptr<IType> type, std::shared_ptr<IConst> value) :
+			IPattern(range, std::move(type)),
 			m_value(std::move(value)) {}
 
 		~PatternConst() override = default;
@@ -86,8 +81,8 @@ namespace funcc::nar {
 		Identifier m_name;
 
 	public:
-		PatternNamed(Location location, std::unique_ptr<IType> type, Identifier name) :
-			IPattern(location, std::move(type)),
+		PatternNamed(Range range, std::unique_ptr<IType> type, Identifier name) :
+			IPattern(range, std::move(type)),
 			m_name(std::move(name)) {}
 
 		~PatternNamed() override = default;
@@ -99,20 +94,20 @@ namespace funcc::nar {
 
 	class PatternDataConstructor final : public IPattern {
 		Identifier m_name;
-		Location m_nameLocation;
+		Range m_nameRange;
 		std::vector<std::unique_ptr<IPattern>> m_values;
 
 	public:
 		PatternDataConstructor(
-			Location location,
+			Range range,
 			std::unique_ptr<IType> type,
 			Identifier name,
-			Location nameLocation,
+			Range nameRange,
 			std::vector<std::unique_ptr<IPattern>>&& values
 		) :
-			IPattern(location, std::move(type)),
+			IPattern(range, std::move(type)),
 			m_name(std::move(name)),
-			m_nameLocation(nameLocation),
+			m_nameRange(nameRange),
 			m_values(std::move(values)) {}
 
 		~PatternDataConstructor() override = default;
@@ -121,8 +116,8 @@ namespace funcc::nar {
 			return m_name;
 		}
 
-		[[nodiscard]] Location const& GetNameLocation() const {
-			return m_nameLocation;
+		[[nodiscard]] Range const& GetNameRange() const {
+			return m_nameRange;
 		}
 
 		[[nodiscard]] std::vector<std::unique_ptr<IPattern>> const& GetValues() const {
@@ -134,8 +129,8 @@ namespace funcc::nar {
 		std::vector<std::unique_ptr<IPattern>> m_patterns;
 
 	public:
-		PatternList(Location location, std::unique_ptr<IType> type, std::vector<std::unique_ptr<IPattern>>&& patterns) :
-			IPattern(location, std::move(type)),
+		PatternList(Range range, std::unique_ptr<IType> type, std::vector<std::unique_ptr<IPattern>>&& patterns) :
+			IPattern(range, std::move(type)),
 			m_patterns(std::move(patterns)) {}
 
 		~PatternList() override = default;
@@ -146,20 +141,16 @@ namespace funcc::nar {
 	};
 
 	class PatternRecord final : public IPattern {
-		std::vector<std::pair<Location, Identifier>> m_fields;
+		std::vector<std::pair<Range, Identifier>> m_fields;
 
 	public:
-		PatternRecord(
-			Location location,
-			std::unique_ptr<IType> type,
-			std::vector<std::pair<Location, Identifier>>&& fields
-		) :
-			IPattern(location, std::move(type)),
+		PatternRecord(Range range, std::unique_ptr<IType> type, std::vector<std::pair<Range, Identifier>>&& fields) :
+			IPattern(range, std::move(type)),
 			m_fields(std::move(fields)) {}
 
 		~PatternRecord() override = default;
 
-		[[nodiscard]] std::vector<std::pair<Location, Identifier>> const& GetFields() const {
+		[[nodiscard]] std::vector<std::pair<Range, Identifier>> const& GetFields() const {
 			return m_fields;
 		}
 	};
@@ -168,8 +159,8 @@ namespace funcc::nar {
 		std::vector<std::unique_ptr<IPattern>> m_items;
 
 	public:
-		PatternTuple(Location location, std::unique_ptr<IType> type, std::vector<std::unique_ptr<IPattern>>&& items) :
-			IPattern(location, std::move(type)),
+		PatternTuple(Range range, std::unique_ptr<IType> type, std::vector<std::unique_ptr<IPattern>>&& items) :
+			IPattern(range, std::move(type)),
 			m_items(std::move(items)) {}
 
 		~PatternTuple() override = default;

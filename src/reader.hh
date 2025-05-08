@@ -10,11 +10,14 @@ namespace funcc {
 	public:
 		virtual ~IReader() = default;
 
-		[[nodiscard]] virtual uint32_t GeCurrentChar() const = 0;
-		[[nodiscard]] virtual Location const GetLocation() const = 0;
-		[[nodiscard]] virtual std::string_view Sub(Location const& start, Location const& end) const = 0;
+		[[nodiscard]] virtual uint32_t GetChar() const = 0;
+		[[nodiscard]] virtual Location GetLocation() const = 0;
+		[[nodiscard]] virtual std::string_view Sub(Range const& range) const = 0;
 
-		virtual void Move() = 0;
+		virtual Location Push() = 0;
+		virtual Location Pop() = 0;
+
+		virtual bool Move() = 0;
 	};
 
 	class Utf8Reader : public IReader {
@@ -22,10 +25,11 @@ namespace funcc {
 		Location m_location;
 		uint32_t m_currentChar;
 		size_t m_currentLength;
+		std::vector<Location> m_stack;
 
 	public:
 		Utf8Reader(std::string_view buffer) :
-			m_buffer(buffer),
+			m_buffer(std::move(buffer)),
 			m_location{0, 1, 1},
 			m_currentChar(0),
 			m_currentLength(0) {
@@ -34,19 +38,32 @@ namespace funcc {
 
 		~Utf8Reader() override = default;
 
-		[[nodiscard]] uint32_t GeCurrentChar() const override {
+		[[nodiscard]] uint32_t GetChar() const override {
 			return m_currentChar;
 		}
 
-		[[nodiscard]] Location const GetLocation() const override {
+		[[nodiscard]] Location GetLocation() const override {
 			return m_location;
 		}
 
-		[[nodiscard]] std::string_view Sub(Location const& start, Location const& end) const override {
-			return m_buffer.substr(start.position, end.position - start.position);
+		Location Push() override {
+			m_stack.push_back(m_location);
+			return m_location;
 		}
 
-		void Move() override {
+		Location Pop() override {
+			Location location = m_location;
+			m_location = m_stack.back();
+			m_stack.pop_back();
+			Peek();
+			return location;
+		}
+
+		[[nodiscard]] std::string_view Sub(Range const& range) const override {
+			return m_buffer.substr(range.start.position, range.end.position - range.start.position);
+		}
+
+		bool Move() override {
 			if (m_currentChar == '\n') {
 				m_location.line++;
 				m_location.column = 0;
@@ -54,6 +71,8 @@ namespace funcc {
 			m_location.column++;
 			m_location.position += m_currentLength;
 			Peek();
+
+			return m_currentLength > 0;
 		}
 
 	private:

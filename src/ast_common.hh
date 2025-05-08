@@ -38,6 +38,10 @@ namespace funcc {
 
 		Location(Location const& other) = default;
 		Location& operator=(Location const& other) = default;
+
+		bool operator<(Location const& other) const {
+			return position < other.position;
+		}
 	};
 
 	struct Range {
@@ -46,13 +50,20 @@ namespace funcc {
 
 		Range() = default;
 
-		explicit Range(Location const& start) :
-			start{start},
-			end{start} {}
+		explicit Range(Location start) :
+			start{std::move(start)},
+			end{std::move(start)} {}
 
-		Range(Location const& start, Location const& end) :
-			start{start},
-			end{end} {}
+		Range(Location start, Location end) :
+			start{std::move(start)},
+			end{std::move(end)} {}
+
+		Range(Range const& other) = default;
+		Range& operator=(Range const& other) = default;
+
+		bool operator<(Range const& other) const {
+			return start < other.start;
+		}
 	};
 
 	class IConst {
@@ -65,7 +76,7 @@ namespace funcc {
 
 	public:
 		ConstChar(TChar value) :
-			m_value(value) {}
+			m_value(std::move(value)) {}
 
 		[[nodiscard]] TChar GetValue() const {
 			return m_value;
@@ -77,7 +88,7 @@ namespace funcc {
 
 	public:
 		ConstInt(TInt value) :
-			m_value(value) {}
+			m_value(std::move(value)) {}
 
 		~ConstInt() override = default;
 
@@ -91,7 +102,7 @@ namespace funcc {
 
 	public:
 		ConstFloat(TFloat value) :
-			m_value(value) {}
+			m_value(std::move(value)) {}
 
 		~ConstFloat() override = default;
 
