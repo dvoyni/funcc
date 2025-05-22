@@ -1,8 +1,6 @@
 #pragma once
 
-#include <stdint.h>
-#include <string_view>
-
+#include "_external.hh"
 #include "ast_common.hh"
 
 namespace funcc {

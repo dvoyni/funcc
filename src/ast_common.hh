@@ -1,9 +1,9 @@
 #pragma once
-#include <string>
+#include "_external.hh"
 
 // TODO: make it configurable in runtime
 #ifndef TChar
-#define TChar char
+#define TChar std::string_view::value_type
 #endif
 
 #ifndef TInt
@@ -63,6 +63,10 @@ namespace funcc {
 
 		bool operator<(Range const& other) const {
 			return start < other.start;
+		}
+
+		Range operator+(Range const& other) const {
+			return Range{start, other.end};
 		}
 	};
 

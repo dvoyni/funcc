@@ -1,18 +1,17 @@
 #pragma once
 
-#include <vector>
-
+#include "../_external.hh"
 #include "ast_common.hh"
 
 namespace funcc::nar {
 
 	class ExpressionAccess final : public IExpression {
-		std::unique_ptr<IExpression> m_record;
+		std::shared_ptr<IExpression> m_record;
 		Identifier m_fieldName;
 		Range m_fieldNameRange;
 
 	public:
-		ExpressionAccess(Range range, std::unique_ptr<IExpression> record, Identifier fieldName, Range fieldNameRange) :
+		ExpressionAccess(Range range, std::shared_ptr<IExpression> record, Identifier fieldName, Range fieldNameRange) :
 			IExpression(std::move(range)),
 			m_record(std::move(record)),
 			m_fieldName(std::move(fieldName)),
@@ -34,29 +33,29 @@ namespace funcc::nar {
 	};
 
 	class ExpressionAccessor final : public IExpression {
-		std::unique_ptr<IExpression> m_fieldName;
+		Identifier m_fieldName;
 
 	public:
-		ExpressionAccessor(Range range, std::unique_ptr<IExpression> fieldName) :
+		ExpressionAccessor(Range range, Identifier fieldName) :
 			IExpression(std::move(range)),
 			m_fieldName(std::move(fieldName)) {}
 
 		~ExpressionAccessor() override = default;
 
-		[[nodiscard]] IExpression const& GetFieldName() const {
-			return *m_fieldName;
+		[[nodiscard]] Identifier const& GetFieldName() const {
+			return m_fieldName;
 		}
 	};
 
 	class ExpressionApply final : public IExpression {
-		std::unique_ptr<IExpression> m_function;
-		std::vector<std::unique_ptr<IExpression>> m_args;
+		std::shared_ptr<IExpression> m_function;
+		std::vector<std::shared_ptr<IExpression>> m_args;
 
 	public:
 		ExpressionApply(
 			Range range,
-			std::unique_ptr<IExpression> function,
-			std::vector<std::unique_ptr<IExpression>>&& args
+			std::shared_ptr<IExpression> function,
+			std::vector<std::shared_ptr<IExpression>>&& args
 		) :
 			IExpression(std::move(range)),
 			m_function(std::move(function)),
@@ -68,50 +67,55 @@ namespace funcc::nar {
 			return *m_function;
 		}
 
-		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetArgs() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IExpression>> const& GetArgs() const {
 			return m_args;
 		}
 	};
 
 	class ExpressionBinOp final : public IExpression {
-	public:
-		struct Operand {
-			std::unique_ptr<IExpression> operand;
-			Identifier infix;
-		};
-
 	private:
-		std::vector<Operand> m_operands;
-		bool m_inParentheses;
+		std::shared_ptr<IExpression> m_left;
+		std::shared_ptr<IExpression> m_op;
+		std::shared_ptr<IExpression> m_right;
 
 	public:
-		ExpressionBinOp(Range range, std::vector<Operand>&& operands, bool inParentheses) :
+		ExpressionBinOp(
+			Range range,
+			std::shared_ptr<IExpression> left,
+			std::shared_ptr<IExpression> op,
+			std::shared_ptr<IExpression> right
+		) :
 			IExpression(std::move(range)),
-			m_operands(std::move(operands)),
-			m_inParentheses(inParentheses) {}
+			m_left(std::move(left)),
+			m_op(std::move(op)),
+			m_right(std::move(right)) {}
 
 		~ExpressionBinOp() override = default;
 
-		[[nodiscard]] std::vector<Operand> const& GetOperands() const {
-			return m_operands;
+		[[nodiscard]] IExpression const& GetLeft() const {
+			return *m_left;
 		}
 
-		[[nodiscard]] bool IsInParentheses() const {
-			return m_inParentheses;
+		[[nodiscard]] IExpression const& GetOp() const {
+			return *m_op;
+		}
+
+		[[nodiscard]] IExpression const& GetRight() const {
+			return *m_right;
 		}
 	};
 
 	class ExpressionCall final : public IExpression {
 		FullIdentifier m_name;
 		Range m_nameRange;
-		std::vector<std::unique_ptr<IExpression>> m_args;
+		std::vector<std::shared_ptr<IExpression>> m_args;
 
 	public:
 		ExpressionCall(
 			Range range,
 			FullIdentifier name,
 			Range nameRange,
-			std::vector<std::unique_ptr<IExpression>>&& args
+			std::vector<std::shared_ptr<IExpression>>&& args
 		) :
 			IExpression(std::move(range)),
 			m_name(std::move(name)),
@@ -128,7 +132,7 @@ namespace funcc::nar {
 			return m_nameRange;
 		}
 
-		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetArgs() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IExpression>> const& GetArgs() const {
 			return m_args;
 		}
 	};
@@ -153,7 +157,7 @@ namespace funcc::nar {
 		Identifier m_data;
 		Identifier m_option;
 		Range m_nameRange;
-		std::vector<std::unique_ptr<IExpression>> m_args;
+		std::vector<std::shared_ptr<IExpression>> m_args;
 
 	public:
 		ExpressionConstructor(
@@ -162,7 +166,7 @@ namespace funcc::nar {
 			Identifier data,
 			Identifier option,
 			Range nameRange,
-			std::vector<std::unique_ptr<IExpression>>&& args
+			std::vector<std::shared_ptr<IExpression>>&& args
 		) :
 			IExpression(std::move(range)),
 			m_module(std::move(module)),
@@ -189,7 +193,7 @@ namespace funcc::nar {
 			return m_nameRange;
 		}
 
-		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetArgs() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IExpression>> const& GetArgs() const {
 			return m_args;
 		}
 	};
@@ -197,20 +201,20 @@ namespace funcc::nar {
 	class ExpressionLetFunction final : public IExpression {
 		Identifier m_name;
 		Range m_nameRange;
-		std::vector<std::unique_ptr<IPattern>> m_params;
-		std::unique_ptr<IExpression> m_body;
-		std::unique_ptr<IType> m_type;
-		std::unique_ptr<IExpression> m_nested;
+		std::vector<std::shared_ptr<IPattern>> m_params;
+		std::shared_ptr<IExpression> m_body;
+		std::shared_ptr<IType> m_type;
+		std::shared_ptr<IExpression> m_nested;
 
 	public:
 		ExpressionLetFunction(
 			Range range,
 			Identifier name,
 			Range nameRange,
-			std::vector<std::unique_ptr<IPattern>>&& params,
-			std::unique_ptr<IExpression> body,
-			std::unique_ptr<IType> type,
-			std::unique_ptr<IExpression> nested
+			std::vector<std::shared_ptr<IPattern>>&& params,
+			std::shared_ptr<IExpression> body,
+			std::shared_ptr<IType> type,
+			std::shared_ptr<IExpression> nested
 		) :
 			IExpression(std::move(range)),
 			m_name(std::move(name)),
@@ -230,7 +234,7 @@ namespace funcc::nar {
 			return m_nameRange;
 		}
 
-		[[nodiscard]] std::vector<std::unique_ptr<IPattern>> const& GetParams() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IPattern>> const& GetParams() const {
 			return m_params;
 		}
 
@@ -248,16 +252,16 @@ namespace funcc::nar {
 	};
 
 	class ExpressionIf final : public IExpression {
-		std::unique_ptr<IExpression> m_condition;
-		std::unique_ptr<IExpression> m_trueBranch;
-		std::unique_ptr<IExpression> m_falseBranch;
+		std::shared_ptr<IExpression> m_condition;
+		std::shared_ptr<IExpression> m_trueBranch;
+		std::shared_ptr<IExpression> m_falseBranch;
 
 	public:
 		ExpressionIf(
 			Range range,
-			std::unique_ptr<IExpression> condition,
-			std::unique_ptr<IExpression> trueBranch,
-			std::unique_ptr<IExpression> falseBranch
+			std::shared_ptr<IExpression> condition,
+			std::shared_ptr<IExpression> trueBranch,
+			std::shared_ptr<IExpression> falseBranch
 		) :
 			IExpression(std::move(range)),
 			m_condition(std::move(condition)),
@@ -295,16 +299,16 @@ namespace funcc::nar {
 	};
 
 	class ExpressionLambda final : public IExpression {
-		std::vector<std::unique_ptr<IPattern>> m_params;
-		std::unique_ptr<IExpression> m_body;
-		std::unique_ptr<IType> m_returnType;
+		std::vector<std::shared_ptr<IPattern>> m_params;
+		std::shared_ptr<IExpression> m_body;
+		std::shared_ptr<IType> m_returnType;
 
 	public:
 		ExpressionLambda(
 			Range range,
-			std::vector<std::unique_ptr<IPattern>>&& params,
-			std::unique_ptr<IExpression> body,
-			std::unique_ptr<IType> returnType
+			std::vector<std::shared_ptr<IPattern>>&& params,
+			std::shared_ptr<IExpression> body,
+			std::shared_ptr<IType> returnType
 		) :
 			IExpression(std::move(range)),
 			m_params(std::move(params)),
@@ -313,7 +317,7 @@ namespace funcc::nar {
 
 		~ExpressionLambda() override = default;
 
-		[[nodiscard]] std::vector<std::unique_ptr<IPattern>> const& GetParams() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IPattern>> const& GetParams() const {
 			return m_params;
 		}
 
@@ -327,16 +331,16 @@ namespace funcc::nar {
 	};
 
 	class ExpressionLetVar final : public IExpression {
-		std::unique_ptr<IPattern> m_pattern;
-		std::unique_ptr<IExpression> m_value;
-		std::unique_ptr<IExpression> m_nested;
+		std::shared_ptr<IPattern> m_pattern;
+		std::shared_ptr<IExpression> m_value;
+		std::shared_ptr<IExpression> m_nested;
 
 	public:
 		ExpressionLetVar(
 			Range range,
-			std::unique_ptr<IPattern> pattern,
-			std::unique_ptr<IExpression> value,
-			std::unique_ptr<IExpression> nested
+			std::shared_ptr<IPattern> pattern,
+			std::shared_ptr<IExpression> value,
+			std::shared_ptr<IExpression> nested
 		) :
 			IExpression(std::move(range)),
 			m_pattern(std::move(pattern)),
@@ -359,25 +363,25 @@ namespace funcc::nar {
 	};
 
 	class ExpressionList final : public IExpression {
-		std::vector<std::unique_ptr<IExpression>> m_expressions;
+		std::vector<std::shared_ptr<IExpression>> m_expressions;
 
 	public:
-		ExpressionList(Range range, std::vector<std::unique_ptr<IExpression>>&& expressions) :
+		ExpressionList(Range range, std::vector<std::shared_ptr<IExpression>>&& expressions) :
 			IExpression(std::move(range)),
 			m_expressions(std::move(expressions)) {}
 
 		~ExpressionList() override = default;
 
-		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetExpressions() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IExpression>> const& GetExpressions() const {
 			return m_expressions;
 		}
 	};
 
 	class ExpressionNegate final : public IExpression {
-		std::unique_ptr<IExpression> m_expression;
+		std::shared_ptr<IExpression> m_expression;
 
 	public:
-		ExpressionNegate(Range range, std::unique_ptr<IExpression> expression) :
+		ExpressionNegate(Range range, std::shared_ptr<IExpression> expression) :
 			IExpression(std::move(range)),
 			m_expression(std::move(expression)) {}
 
@@ -393,7 +397,7 @@ namespace funcc::nar {
 		struct Field {
 			Identifier name;
 			Range nameRange;
-			std::unique_ptr<IExpression> value;
+			std::shared_ptr<IExpression> value;
 		};
 
 	private:
@@ -415,17 +419,17 @@ namespace funcc::nar {
 	public:
 		struct Case {
 			Range range;
-			std::unique_ptr<IPattern> pattern;
-			std::unique_ptr<IExpression> expression;
+			std::shared_ptr<IPattern> pattern;
+			std::shared_ptr<IExpression> expression;
 		};
 
 	private:
-		std::unique_ptr<IExpression> m_condition;
+		std::shared_ptr<IExpression> m_condition;
 
 		std::vector<Case> m_cases;
 
 	public:
-		ExpressionSelector(Range range, std::unique_ptr<IExpression> condition, std::vector<Case>&& cases) :
+		ExpressionSelector(Range range, std::shared_ptr<IExpression> condition, std::vector<Case>&& cases) :
 			IExpression(std::move(range)),
 			m_condition(std::move(condition)),
 			m_cases(std::move(cases)) {}
@@ -442,16 +446,16 @@ namespace funcc::nar {
 	};
 
 	class ExpressionTuple final : public IExpression {
-		std::vector<std::unique_ptr<IExpression>> m_expressions;
+		std::vector<std::shared_ptr<IExpression>> m_expressions;
 
 	public:
-		ExpressionTuple(Range range, std::vector<std::unique_ptr<IExpression>>&& expressions) :
+		ExpressionTuple(Range range, std::vector<std::shared_ptr<IExpression>>&& expressions) :
 			IExpression(std::move(range)),
 			m_expressions(std::move(expressions)) {}
 
 		~ExpressionTuple() override = default;
 
-		[[nodiscard]] std::vector<std::unique_ptr<IExpression>> const& GetExpressions() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IExpression>> const& GetExpressions() const {
 			return m_expressions;
 		}
 	};
@@ -462,15 +466,15 @@ namespace funcc::nar {
 			Range range;
 			Identifier name;
 			Range nameRange;
-			std::unique_ptr<IExpression> value;
+			std::shared_ptr<IExpression> value;
 		};
 
 	private:
-		std::unique_ptr<IExpression> m_record;
+		std::shared_ptr<IExpression> m_record;
 		std::vector<Field> m_fields;
 
 	public:
-		ExpressionUpdate(Range range, std::unique_ptr<IExpression> record, std::vector<Field>&& fields) :
+		ExpressionUpdate(Range range, std::shared_ptr<IExpression> record, std::vector<Field>&& fields) :
 			IExpression(std::move(range)),
 			m_record(std::move(record)),
 			m_fields(std::move(fields)) {}
