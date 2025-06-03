@@ -198,59 +198,6 @@ namespace funcc::nar {
 		}
 	};
 
-	class ExpressionLetFunction final : public IExpression {
-		Identifier m_name;
-		Range m_nameRange;
-		std::vector<std::shared_ptr<IPattern>> m_params;
-		std::shared_ptr<IExpression> m_body;
-		std::shared_ptr<IType> m_type;
-		std::shared_ptr<IExpression> m_nested;
-
-	public:
-		ExpressionLetFunction(
-			Range range,
-			Identifier name,
-			Range nameRange,
-			std::vector<std::shared_ptr<IPattern>>&& params,
-			std::shared_ptr<IExpression> body,
-			std::shared_ptr<IType> type,
-			std::shared_ptr<IExpression> nested
-		) :
-			IExpression(std::move(range)),
-			m_name(std::move(name)),
-			m_nameRange(std::move(nameRange)),
-			m_params(std::move(params)),
-			m_body(std::move(body)),
-			m_type(std::move(type)),
-			m_nested(std::move(nested)) {}
-
-		~ExpressionLetFunction() override = default;
-
-		[[nodiscard]] Identifier const& GetName() const {
-			return m_name;
-		}
-
-		[[nodiscard]] Range const& GetNameRange() const {
-			return m_nameRange;
-		}
-
-		[[nodiscard]] std::vector<std::shared_ptr<IPattern>> const& GetParams() const {
-			return m_params;
-		}
-
-		[[nodiscard]] IExpression const& GetBody() const {
-			return *m_body;
-		}
-
-		[[nodiscard]] IType const& GetType() const {
-			return *m_type;
-		}
-
-		[[nodiscard]] IExpression const& GetNested() const {
-			return *m_nested;
-		}
-	};
-
 	class ExpressionIf final : public IExpression {
 		std::shared_ptr<IExpression> m_condition;
 		std::shared_ptr<IExpression> m_trueBranch;
@@ -283,15 +230,15 @@ namespace funcc::nar {
 		}
 	};
 
-	class ExpressionIfixVar final : public IExpression {
+	class ExpressionInfixVar final : public IExpression {
 		InfixIdentifier m_infix;
 
 	public:
-		ExpressionIfixVar(Range range, InfixIdentifier infix) :
+		ExpressionInfixVar(Range range, InfixIdentifier infix) :
 			IExpression(std::move(range)),
 			m_infix(std::move(infix)) {}
 
-		~ExpressionIfixVar() override = default;
+		~ExpressionInfixVar() override = default;
 
 		[[nodiscard]] InfixIdentifier const& GetInfix() const {
 			return m_infix;
@@ -300,20 +247,20 @@ namespace funcc::nar {
 
 	class ExpressionLambda final : public IExpression {
 		std::vector<std::shared_ptr<IPattern>> m_params;
-		std::shared_ptr<IExpression> m_body;
 		std::shared_ptr<IType> m_returnType;
+		std::shared_ptr<IExpression> m_body;
 
 	public:
 		ExpressionLambda(
 			Range range,
 			std::vector<std::shared_ptr<IPattern>>&& params,
-			std::shared_ptr<IExpression> body,
-			std::shared_ptr<IType> returnType
+			std::shared_ptr<IType> returnType,
+			std::shared_ptr<IExpression> body
 		) :
 			IExpression(std::move(range)),
 			m_params(std::move(params)),
-			m_body(std::move(body)),
-			m_returnType(std::move(returnType)) {}
+			m_returnType(std::move(returnType)),
+			m_body(std::move(body)) {}
 
 		~ExpressionLambda() override = default;
 
@@ -327,6 +274,59 @@ namespace funcc::nar {
 
 		[[nodiscard]] IType const& GetReturnType() const {
 			return *m_returnType;
+		}
+	};
+
+	class ExpressionLetFunction final : public IExpression {
+		Identifier m_name;
+		Range m_nameRange;
+		std::vector<std::shared_ptr<IPattern>> m_params;
+		std::shared_ptr<IType> m_returnType;
+		std::shared_ptr<IExpression> m_body;
+		std::shared_ptr<IExpression> m_nested;
+
+	public:
+		ExpressionLetFunction(
+			Range range,
+			Identifier name,
+			Range nameRange,
+			std::vector<std::shared_ptr<IPattern>>&& params,
+			std::shared_ptr<IType> returnType,
+			std::shared_ptr<IExpression> body,
+			std::shared_ptr<IExpression> nested
+		) :
+			IExpression(std::move(range)),
+			m_name(std::move(name)),
+			m_nameRange(std::move(nameRange)),
+			m_params(std::move(params)),
+			m_returnType(std::move(returnType)),
+			m_body(std::move(body)),
+			m_nested(std::move(nested)) {}
+
+		~ExpressionLetFunction() override = default;
+
+		[[nodiscard]] Identifier const& GetName() const {
+			return m_name;
+		}
+
+		[[nodiscard]] Range const& GetNameRange() const {
+			return m_nameRange;
+		}
+
+		[[nodiscard]] std::vector<std::shared_ptr<IPattern>> const& GetParams() const {
+			return m_params;
+		}
+
+		[[nodiscard]] IExpression const& GetBody() const {
+			return *m_body;
+		}
+
+		[[nodiscard]] IType const& GetReturnType() const {
+			return *m_returnType;
+		}
+
+		[[nodiscard]] IExpression const& GetNested() const {
+			return *m_nested;
 		}
 	};
 
@@ -395,6 +395,7 @@ namespace funcc::nar {
 	class ExpressionRecord final : public IExpression {
 	public:
 		struct Field {
+			Range range;
 			Identifier name;
 			Range nameRange;
 			std::shared_ptr<IExpression> value;
@@ -415,7 +416,7 @@ namespace funcc::nar {
 		}
 	};
 
-	class ExpressionSelector final : public IExpression {
+	class ExpressionSelect final : public IExpression {
 	public:
 		struct Case {
 			Range range;
@@ -429,12 +430,12 @@ namespace funcc::nar {
 		std::vector<Case> m_cases;
 
 	public:
-		ExpressionSelector(Range range, std::shared_ptr<IExpression> condition, std::vector<Case>&& cases) :
+		ExpressionSelect(Range range, std::shared_ptr<IExpression> condition, std::vector<Case>&& cases) :
 			IExpression(std::move(range)),
 			m_condition(std::move(condition)),
 			m_cases(std::move(cases)) {}
 
-		~ExpressionSelector() override = default;
+		~ExpressionSelect() override = default;
 
 		[[nodiscard]] IExpression const& GetCondition() const {
 			return *m_condition;

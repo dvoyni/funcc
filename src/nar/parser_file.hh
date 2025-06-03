@@ -384,7 +384,7 @@ namespace funcc::nar {
 				},
 				C::PWS
 			),
-			OneOf(C::Tokens{PAlias, PInfix, PData, PDefinition}, C::PWS),
+			OneOf(C::Tokens{PAlias, PInfix, PData, PFunctionDefinition}, C::PWS),
 			C::PWS,
 			true
 		);

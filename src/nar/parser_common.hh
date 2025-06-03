@@ -54,10 +54,15 @@ namespace funcc::nar {
 		constexpr static std::string_view SeqTupleOpen = "(";
 		constexpr static std::string_view SeqTupleClose = ")";
 		constexpr static std::string_view SeqTupleSep = ",";
+		constexpr static std::string_view SeqListOpen = "[";
+		constexpr static std::string_view SeqListClose = "]";
+		constexpr static std::string_view SeqListSep = ",";
 		constexpr static std::string_view SeqTypeAnnotation = ":";
 		constexpr static std::string_view SeqRecordOpen = "{";
 		constexpr static std::string_view SeqRecordClose = "}";
 		constexpr static std::string_view SeqRecordSep = ",";
+		constexpr static std::string_view SeqRecordBind = "=";
+		constexpr static std::string_view SeqRecordUpdate = "|";
 		constexpr static std::string_view SeqFuncOpen = "(";
 		constexpr static std::string_view SeqFuncClose = ")";
 		constexpr static std::string_view SeqFuncSep = ",";
@@ -78,10 +83,11 @@ namespace funcc::nar {
 		constexpr static std::string_view SeqCharPrefix = "'";
 		constexpr static std::string_view SeqCharSuffix = "'";
 		constexpr static std::string_view SeqCharEscape = "\\";
-		constexpr static std::string_view SeqListOpen = "[";
-		constexpr static std::string_view SeqListClose = "]";
-		constexpr static std::string_view SeqListSep = ",";
 		constexpr static std::string_view SeqAccessor = ".";
+		constexpr static std::string_view SeqLambdaSignature = "\\(";
+		constexpr static std::string_view SeqLambdaBind = "->";
+		constexpr static std::string_view SeqNegate = "-";
+		constexpr static std::string_view SeqCaseBind = "->";
 
 		constexpr static std::string::value_type SmbIdentifierSeparator = '.';
 		constexpr static std::string_view SmbIdentifier =

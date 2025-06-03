@@ -15,8 +15,9 @@ namespace funcc::nar {
 	public:
 		struct FunctionSignature {
 			Identifier name;
+			Range nameRange;
 			std::vector<std::shared_ptr<IPattern>> args;
-			std::shared_ptr<IType> ret;
+			std::shared_ptr<IType> returnType;
 		};
 
 		using PatternValue = Value<std::shared_ptr<nar::IPattern>>;
@@ -239,29 +240,30 @@ namespace funcc::nar {
 					value->GetRange(),
 					FunctionSignature{
 						.name = std::dynamic_pointer_cast<C::IdentifierValue>(mv[0])->GetValue(),
+						.nameRange = mv[0]->GetRange(),
 						.args = mv[1]->IsSkipped()
 							? std::vector<std::shared_ptr<IPattern>>{}
 							: std::dynamic_pointer_cast<MultiValue>(mv[1])->Extract<std::shared_ptr<IPattern>>(),
-						.ret =
+						.returnType =
 							mv[2]->IsSkipped() ? nullptr : std::dynamic_pointer_cast<T::TypeValue>(mv[2])->GetValue(),
 					}
 				);
 			}
 		);
-
-		inline static std::shared_ptr<IToken> PatternParser::PPattern = OneOf(
-			CommonParser::Tokens{
-				PAlias,
-				PAny,
-				PCons,
-				PConst,
-				PNamed,
-				PDataConstructor,
-				PList,
-				PRecord,
-				PTuple,
-			},
-			CommonParser::PWS
-		);
 	};
+
+	inline std::shared_ptr<IToken> PatternParser::PPattern = OneOf(
+		CommonParser::Tokens{
+			PAlias,
+			PAny,
+			PCons,
+			PConst,
+			PNamed,
+			PDataConstructor,
+			PList,
+			PRecord,
+			PTuple,
+		},
+		CommonParser::PWS
+	);
 }
