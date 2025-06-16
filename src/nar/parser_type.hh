@@ -13,7 +13,24 @@ namespace funcc::nar {
 	public:
 		using TypeValue = Value<std::shared_ptr<nar::IType>>;
 
-		static std::shared_ptr<IToken> PType;
+		inline static std::shared_ptr<IToken> PType = ForwardDeclaration();
+
+		inline static std::shared_ptr<IToken> PTypeParameters = Some(
+			Map(C::PIdentifier,
+				[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
+					return std::make_shared<TypeValue>(
+						value->GetRange(),
+						std::make_shared<VarintType>(
+							value->GetRange(),
+							std::dynamic_pointer_cast<C::IdentifierValue>(value)->GetValue()
+						)
+					);
+				}),
+			Exact(C::SeqTypeParametersOpen, C::PWS),
+			Exact(C::SeqTypeParametersClose, C::PWS),
+			Exact(C::SeqTypeParametersSep, C::PWS),
+			C::PWS
+		);
 
 		inline static std::shared_ptr<IToken> PTypeAnnotation = Map(
 			All(C::Tokens{Exact(C::SeqTypeAnnotation, C::PWS), PType}, C::PWS),
@@ -38,22 +55,20 @@ namespace funcc::nar {
 				C::PWS
 			),
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
+				std::shared_ptr<MultiValue> mv = std::dynamic_pointer_cast<MultiValue>(value);
 				return std::make_shared<TypeValue>(
 					value->GetRange(),
 					std::make_shared<nar::FunctionType>(
 						value->GetRange(),
-						std::dynamic_pointer_cast<MultiValue>(value)->Extract<std::shared_ptr<nar::IType>>(),
-						std::dynamic_pointer_cast<TypeValue>(
-							std::dynamic_pointer_cast<MultiValue>(value)->GetValues()[1]
-						)
-							->GetValue()
+						mv->Extract<std::shared_ptr<nar::IType>>(),
+						std::dynamic_pointer_cast<TypeValue>(mv->GetValues()[1])->GetValue()
 					)
 				);
 			}
 		);
 
 		inline static std::shared_ptr<IToken> PNamedType = Map(
-			All(C::Tokens{C::PIdentifier, Optional(C::PTypeParameters)}, C::PWS),
+			All(C::Tokens{C::PIdentifier, Optional(PTypeParameters)}, C::PWS),
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
 				std::vector<std::shared_ptr<ITokenValue>> mv = std::dynamic_pointer_cast<MultiValue>(value)->GetValues(
 				);
@@ -143,17 +158,11 @@ namespace funcc::nar {
 				);
 			}
 		);
-	};
 
-	inline std::shared_ptr<IToken> TypeParser::PType = OneOf(
-		CommonParser::Tokens{
-			TypeParser::PFunctionType,
-			TypeParser::PNamedType,
-			TypeParser::PVariantType,
-			TypeParser::PRecordType,
-			TypeParser::PTupleType,
-			TypeParser::PUnitType
-		},
-		CommonParser::PWS
-	);
+	private:
+		inline static ForwardDeclarationToken::Replacement PTypeReplacement{
+			PType,
+			C::Tokens{PFunctionType, PNamedType, PVariantType, PRecordType, PTupleType, PUnitType}
+		};
+	};
 }

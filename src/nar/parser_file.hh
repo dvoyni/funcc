@@ -113,44 +113,44 @@ namespace funcc::nar {
 				C::Tokens{
 					Exact(C::KwAlias, C::PWS),
 					Optional(Exact(C::KwHidden, C::PWS)),
-					Optional(Exact(C::KwNative, C::PWS)),
-					C::PIdentifier,
-					Optional(C::PTypeParameters),
-					Optional(Exact(C::SeqAliasBind, C::PWS), T::PType),
+					Optional(
+						Exact(C::KwNative, C::PWS),
+						All(C::Tokens{C::PIdentifier, Optional(T::PTypeParameters)}, C::PWS),
+						All(
+							C::Tokens{
+								C::PIdentifier,
+								Optional(T::PTypeParameters),
+								Exact(C::SeqAliasBind, C::PWS),
+								T::PType
+							},
+							C::PWS
+						)
+					)
 				},
 				C::PWS
 			),
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
 				C::Values mv = std::dynamic_pointer_cast<MultiValue>(value)->GetValues();
-				bool isNative = !mv[2]->IsSkipped();
-				if (isNative) {
-					if (!mv[5]->IsSkipped()) {
-						return std::make_shared<ErrorValue>(
-							mv[5]->GetRange(),
-							"Native alias cannot have a type binding"
-						);
-					} else {
-						if (mv[5]->IsSkipped()) {
-							return std::make_shared<ErrorValue>(mv[5]->GetRange(), "Expected type binding");
-						}
-					}
-				}
+				bool hidden = !mv[1]->IsSkipped();
+				mv = std::dynamic_pointer_cast<MultiValue>(mv[2])->GetValues();
+
 				return std::make_shared<AliasValue>(
 					value->GetRange(),
 					nar::Alias{
 						value->GetRange(),
-						std::dynamic_pointer_cast<C::IdentifierValue>(mv[3])->GetValue(),
-						mv[3]->GetRange(),
-						!mv[1]->IsSkipped(),
-						isNative ? nullptr : std::dynamic_pointer_cast<T::TypeValue>(mv[5])->GetValue(),
-						mv[4]->IsSkipped() ? std::vector<nar::Identifier>{}
-										   : std::dynamic_pointer_cast<MultiValue>(mv[4])->Extract<nar::Identifier>(),
+						std::dynamic_pointer_cast<C::IdentifierValue>(mv[0])->GetValue(),
+						mv[0]->GetRange(),
+						hidden,
+						mv.size() < 4 ? nullptr : std::dynamic_pointer_cast<T::TypeValue>(mv[3])->GetValue(),
+						mv[1]->IsSkipped()
+							? std::vector<std::shared_ptr<nar::IType>>{}
+							: std::dynamic_pointer_cast<MultiValue>(mv[1])->Extract<std::shared_ptr<nar::IType>>(),
 					}
 				);
 			}
 		);
 
-		// TODO: proposal to think about changing the syntax of infix operator definition
+		// TODO: proposal to think about changing the syntax of infix operator definition, eg `infix (++): left<5> = fn`
 		inline static std::shared_ptr<IToken> PInfix = Map(
 			All(
 				C::Tokens{
@@ -264,7 +264,7 @@ namespace funcc::nar {
 					Exact(C::KwData, C::PWS),
 					Optional(Exact(C::KwHidden, C::PWS)),
 					C::PIdentifier,
-					Optional(C::PTypeParameters),
+					Optional(T::PTypeParameters),
 					Exact(C::SeqDataBind, C::PWS),
 					PDataConstructor(true),
 					Repeat(Exact(C::SeqDataConstructor, C::PWS), PDataConstructor(false), C::PWS, true),
@@ -291,22 +291,35 @@ namespace funcc::nar {
 			}
 		);
 
-		inline static std::shared_ptr<IToken> PFunctionDefinition = Map(
+		inline static std::shared_ptr<IToken> PFunction = Map(
 			All(
 				C::Tokens{
 					Exact(C::KwDef, C::PWS),
 					Optional(Exact(C::KwHidden, C::PWS)),
-					Optional(Exact(C::KwNative, C::PWS),
+					Optional(
+						Exact(C::KwNative, C::PWS),
 						OneOf(
-							C::Tokens{All(C::Tokens{C::PIdentifier, T::PTypeAnnotation}, C::PWS),
-							All(C::Tokens{C::PIdentifier, P::PFunctionSignature}, C::PWS) },
+							C::Tokens{
+								All(C::Tokens{C::PIdentifier, T::PTypeAnnotation}, C::PWS),
+								All(C::Tokens{P::PFunctionSignature}, C::PWS)
+							},
 							C::PWS
 						),
 						OneOf(
 							C::Tokens{
-								All(C::Tokens{C::PIdentifier, Optional(T::PTypeAnnotation), Exact(C::SeqFunctionBind, C::PWS), E::PExpression}, C::PWS),
-								All(C::Tokens{C::PIdentifier, P::PFunctionSignature, Exact(C::SeqFunctionBind, C::PWS), E::PExpression}, C::PWS)
-							}, C::PWS
+								All(
+									C::Tokens{
+										C::PIdentifier,
+										Optional(T::PTypeAnnotation),
+										Exact(C::SeqFunctionBind, C::PWS),
+										E::PExpression
+									},
+									C::PWS
+								),
+								All(C::Tokens{P::PFunctionSignature, Exact(C::SeqFunctionBind, C::PWS), E::PExpression},
+									C::PWS)
+							},
+							C::PWS
 						)
 					),
 				},
@@ -314,59 +327,81 @@ namespace funcc::nar {
 			),
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
 				C::Values mv = std::dynamic_pointer_cast<MultiValue>(value)->GetValues();
-				bool isNative = !mv[1]->IsSkipped();
-				std::shared_ptr<nar::IType> type{};
-				if (mv[3]->IsSkipped()) {
-					if (!mv[4]->IsSkipped()) {
-						type = std::dynamic_pointer_cast<T::TypeValue>(mv[4])->GetValue();
+				bool isHidden = !mv[1]->IsSkipped();
+				mv = std::dynamic_pointer_cast<MultiValue>(mv[2])->GetValues();
+
+				Identifier name{};
+				Range nameRange{};
+				P::FunctionSignature signature{};
+				std::shared_ptr<nar::IExpression> expr{};
+				std::shared_ptr<IType> type{};
+
+				switch (mv.size()) {
+					case 1: {  // native function
+						signature = std::dynamic_pointer_cast<P::FunctionSignatureValue>(mv[0])->GetValue();
+						bool typed = signature.returnType != nullptr;
+						for (auto const& param: signature.params) {
+							if (!param->GetType()) {
+								typed = false;
+								break;
+							}
+						}
+
+						if (!typed) {
+							return std::make_shared<ErrorValue>(value->GetRange(), "Expected type annotation");
+						}
+
+						break;
 					}
-				} else {
-					Range range = mv[3]->GetRange();
-					std::shared_ptr<nar::IType> ret{};
-					if (!mv[4]->IsSkipped()) {
-						range = range + mv[4]->GetRange();
-						ret = std::dynamic_pointer_cast<T::TypeValue>(mv[4])->GetValue();
+					case 2: {  // native constant
+						name = std::dynamic_pointer_cast<C::IdentifierValue>(mv[0])->GetValue();
+						nameRange = mv[0]->GetRange();
+						if (mv[1]->IsSkipped()) {
+							return std::make_shared<ErrorValue>(value->GetRange(), "Expected type annotation");
+						}
+
+						type = std::dynamic_pointer_cast<T::TypeValue>(mv[1])->GetValue();
+						break;
+					}
+					case 3: {  // function
+						signature = std::dynamic_pointer_cast<P::FunctionSignatureValue>(mv[0])->GetValue();
+						expr = std::dynamic_pointer_cast<ExpressionValue>(mv[2])->GetValue();
+						break;
+					}
+					case 4: {  // constant
+						name = std::dynamic_pointer_cast<C::IdentifierValue>(mv[0])->GetValue();
+						if (!mv[1]->IsSkipped()) {
+							type = std::dynamic_pointer_cast<T::TypeValue>(mv[1])->GetValue();
+						}
+						nameRange = mv[0]->GetRange();
+						expr = std::dynamic_pointer_cast<ExpressionValue>(mv[3])->GetValue();
+					}
+				}
+
+				if (name.empty()) {
+					name = signature.name;
+					nameRange = signature.nameRange;
+
+					std::vector<std::shared_ptr<IType>> paramsTypes;
+					paramsTypes.reserve(signature.params.size());
+					for (auto const& param: signature.params) {
+						paramsTypes.push_back(param->GetType());
 					}
 					type = std::make_shared<nar::FunctionType>(
-						range,
-						std::dynamic_pointer_cast<MultiValue>(mv[3])->Extract<std::shared_ptr<nar::IType>>(
-							[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<nar::IType> {
-								return std::dynamic_pointer_cast<P::PatternValue>(value)->GetValue()->GetType();
-							}
-						),
-						ret
+						signature.range,
+						std::move(paramsTypes),
+						signature.returnType
 					);
-				}
-
-				if (isNative && !type) {
-					return std::make_shared<ErrorValue>(
-						mv[2]->GetRange(),
-						"Native definition must have a type annotation"
-					);
-				}
-
-				std::shared_ptr<nar::IExpression> expr{};
-				if (isNative) {
-					if (!mv[5]->IsSkipped()) {
-						return std::make_shared<ErrorValue>(mv[5]->GetRange(), "Native definition cannot have a body");
-					}
-				} else {
-					if (mv[5]->IsSkipped()) {
-						return std::make_shared<ErrorValue>(mv[2]->GetRange(), "Expected definition body");
-					}
-					expr = std::dynamic_pointer_cast<ExpressionValue>(mv[5])->GetValue();
 				}
 
 				return std::make_shared<FunctionValue>(
 					value->GetRange(),
 					nar::Function{
 						value->GetRange(),
-						std::dynamic_pointer_cast<C::IdentifierValue>(mv[2])->GetValue(),
-						mv[2]->GetRange(),
-						!mv[1]->IsSkipped(),
-						mv[3]->IsSkipped()
-							? std::vector<std::shared_ptr<IPattern>>{}
-							: std::dynamic_pointer_cast<MultiValue>(mv[3])->Extract<std::shared_ptr<IPattern>>(),
+						name,
+						nameRange,
+						isHidden,
+						signature.params,
 						type,
 						expr,
 					}
@@ -384,7 +419,7 @@ namespace funcc::nar {
 				},
 				C::PWS
 			),
-			OneOf(C::Tokens{PAlias, PInfix, PData, PFunctionDefinition}, C::PWS),
+			OneOf(C::Tokens{PAlias, PInfix, PData, PFunction}, C::PWS),
 			C::PWS,
 			true
 		);

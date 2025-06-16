@@ -12,10 +12,8 @@ namespace funcc {
 		[[nodiscard]] virtual Location GetLocation() const = 0;
 		[[nodiscard]] virtual std::string_view Sub(Range const& range) const = 0;
 
-		virtual Location Push() = 0;
-		virtual Location Pop() = 0;
-
 		virtual bool Move() = 0;
+		virtual void SetLocation(Location location) = 0;
 	};
 
 	class Utf8Reader : public IReader {
@@ -23,7 +21,6 @@ namespace funcc {
 		Location m_location;
 		uint32_t m_currentChar;
 		size_t m_currentLength;
-		std::vector<Location> m_stack;
 
 	public:
 		Utf8Reader(std::string_view buffer) :
@@ -44,19 +41,6 @@ namespace funcc {
 			return m_location;
 		}
 
-		Location Push() override {
-			m_stack.push_back(m_location);
-			return m_location;
-		}
-
-		Location Pop() override {
-			Location location = m_location;
-			m_location = m_stack.back();
-			m_stack.pop_back();
-			Peek();
-			return location;
-		}
-
 		[[nodiscard]] std::string_view Sub(Range const& range) const override {
 			return m_buffer.substr(range.start.position, range.end.position - range.start.position);
 		}
@@ -71,6 +55,13 @@ namespace funcc {
 			Peek();
 
 			return m_currentLength > 0;
+		}
+
+		void SetLocation(Location location) override {
+			if (location.position < m_buffer.size()) {
+				m_location = location;
+				Peek();
+			}
 		}
 
 	private:

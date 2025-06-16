@@ -6,7 +6,7 @@
 namespace funcc::nar {
 	class Alias : public IDeclaration {
 		std::shared_ptr<IType> m_type;
-		std::vector<Identifier> m_typeParams;
+		std::vector<std::shared_ptr<IType>> m_typeParams;
 
 	public:
 		Alias(
@@ -15,7 +15,7 @@ namespace funcc::nar {
 			Range nameRange,
 			bool hidden,
 			std::shared_ptr<IType> type,
-			std::vector<Identifier> typeParams
+			std::vector<std::shared_ptr<IType>> typeParams
 		) :
 			IDeclaration{std::move(range), std::move(name), std::move(nameRange), hidden},
 			m_type{std::move(type)},
@@ -23,7 +23,7 @@ namespace funcc::nar {
 
 		~Alias() override = default;
 
-		[[nodiscard]] std::vector<Identifier> const& GetTypeParams() const {
+		[[nodiscard]] std::vector<std::shared_ptr<IType>> const& GetTypeParams() const {
 			return m_typeParams;
 		}
 

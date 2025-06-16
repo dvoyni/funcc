@@ -17,7 +17,8 @@ namespace funcc::nar {
 	public:
 		using ExpressionValue = Value<std::shared_ptr<nar::IExpression>>;
 
-		static std::shared_ptr<IToken> PExpression;
+		inline static std::shared_ptr<IToken> PExpression = ForwardDeclaration();
+		inline static std::shared_ptr<IToken> PLet = ForwardDeclaration();
 
 		inline static std::shared_ptr<IToken> PAccessor = Map(
 			All(C::Tokens{Exact(C::SeqAccessor, C::PWS), C::PIdentifier}, C::PWS),
@@ -141,21 +142,13 @@ namespace funcc::nar {
 		);
 
 		inline static std::shared_ptr<IToken> PInfix = Map(
-			All(
-				C::Tokens{
-					Exact(C::SeqInfixOpen, C::PWS),
-					C::PInfixIdentifier,
-					Exact(C::SeqInfixClose, C::PWS),
-				},
-				C::PWS
-			),
+			C::PWrappedInfixIdentifier,
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
-				C::Values mv = std::dynamic_pointer_cast<MultiValue>(value)->GetValues();
 				return std::make_shared<ExpressionValue>(
 					value->GetRange(),
 					std::make_shared<ExpressionInfixVar>(
-						mv[1]->GetRange(),
-						std::dynamic_pointer_cast<C::InfixIdentifierValue>(mv[1])->GetValue()
+						value->GetRange(),
+						std::dynamic_pointer_cast<C::InfixIdentifierValue>(value)->GetValue()
 					)
 				);
 			}
@@ -185,8 +178,6 @@ namespace funcc::nar {
 				);
 			}
 		);
-
-		static std::shared_ptr<IToken> PLet;
 
 		inline static std::shared_ptr<IToken> PLetFunction = Map(
 			All(
@@ -218,7 +209,7 @@ namespace funcc::nar {
 						value->GetRange(),
 						signature.name,
 						signature.nameRange,
-						std::move(signature.args),
+						std::move(signature.params),
 						signature.returnType,
 						std::dynamic_pointer_cast<ExpressionValue>(mv[3])->GetValue(),
 						std::dynamic_pointer_cast<ExpressionValue>(mv[4])->GetValue()
@@ -262,7 +253,7 @@ namespace funcc::nar {
 		);
 
 		inline static std::shared_ptr<IToken> PList = Map(
-			Some(
+			Debug(Some(
 				PExpression,
 				Exact(C::SeqListOpen, C::PWS),
 				Exact(C::SeqListClose, C::PWS),
@@ -270,7 +261,7 @@ namespace funcc::nar {
 				C::PWS,
 				nullptr,  // firstItem
 				true  // allowEmpty
-			),
+			)),
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
 				C::Values mv = std::dynamic_pointer_cast<MultiValue>(value)->GetValues();
 				return std::make_shared<ExpressionValue>(
@@ -424,9 +415,8 @@ namespace funcc::nar {
 			}
 		);
 
-		inline static std::shared_ptr<IToken> PVar = Map(
-			All(C::Tokens{C::PQualifiedIdentifier, C::PWS}, C::PWS),
-			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
+		inline static std::shared_ptr<IToken> PVar =
+			Map(C::PQualifiedIdentifier, [](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
 				return std::make_shared<ExpressionValue>(
 					value->GetRange(),
 					std::make_shared<ExpressionVar>(
@@ -434,37 +424,31 @@ namespace funcc::nar {
 						std::dynamic_pointer_cast<C::QualifiedIdentifierValue>(value)->GetValue()
 					)
 				);
+			});
+
+	private:
+		inline static ForwardDeclarationToken::Replacement PExpressionReplacement{
+			PExpression,
+			C::Tokens{
+				PAccessor,
+				PAccess,
+				PApply,
+				PBinOp,
+				PConst,
+				PIf,
+				PInfix,
+				PLambda,
+				PLet,
+				PList,
+				PNegate,
+				PRecord,
+				PSelect,
+				PTuple,
+				PUpdate,
+				PVar
 			}
-		);
+		};
+
+		inline static ForwardDeclarationToken::Replacement PLetReplacement{PLet, C::Tokens{PLetFunction, PLetValue}};
 	};
-
-	inline std::shared_ptr<IToken> ExpressionParser::PLet = OneOf(
-		CommonParser::Tokens{
-			ExpressionParser::PLetFunction,
-			ExpressionParser::PLetValue,
-		},
-		CommonParser::PWS
-	);
-
-	inline std::shared_ptr<IToken> ExpressionParser::PExpression = OneOf(
-		CommonParser::Tokens{
-			ExpressionParser::PAccessor,
-			ExpressionParser::PAccess,
-			ExpressionParser::PApply,
-			ExpressionParser::PBinOp,
-			ExpressionParser::PConst,
-			ExpressionParser::PIf,
-			ExpressionParser::PInfix,
-			ExpressionParser::PLambda,
-			ExpressionParser::PLet,
-			ExpressionParser::PList,
-			ExpressionParser::PNegate,
-			ExpressionParser::PRecord,
-			ExpressionParser::PSelect,
-			ExpressionParser::PTuple,
-			ExpressionParser::PUpdate,
-			ExpressionParser::PVar
-		},
-		CommonParser::PWS
-	);
 }

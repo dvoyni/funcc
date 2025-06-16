@@ -14,16 +14,17 @@ namespace funcc::nar {
 
 	public:
 		struct FunctionSignature {
+			Range range;
 			Identifier name;
 			Range nameRange;
-			std::vector<std::shared_ptr<IPattern>> args;
+			std::vector<std::shared_ptr<IPattern>> params;
 			std::shared_ptr<IType> returnType;
 		};
 
 		using PatternValue = Value<std::shared_ptr<nar::IPattern>>;
 		using FunctionSignatureValue = funcc::parser::Value<FunctionSignature>;
 
-		static std::shared_ptr<IToken> PPattern;
+		inline static std::shared_ptr<IToken> PPattern = ForwardDeclaration();
 
 		inline static std::shared_ptr<IToken> PAlias = Map(
 			All(C::Tokens{PPattern, Exact(C::KwAs, C::PWS), C::PIdentifier, Optional(T::PTypeAnnotation)}, C::PWS),
@@ -241,7 +242,7 @@ namespace funcc::nar {
 					FunctionSignature{
 						.name = std::dynamic_pointer_cast<C::IdentifierValue>(mv[0])->GetValue(),
 						.nameRange = mv[0]->GetRange(),
-						.args = mv[1]->IsSkipped()
+						.params = mv[1]->IsSkipped()
 							? std::vector<std::shared_ptr<IPattern>>{}
 							: std::dynamic_pointer_cast<MultiValue>(mv[1])->Extract<std::shared_ptr<IPattern>>(),
 						.returnType =
@@ -250,20 +251,11 @@ namespace funcc::nar {
 				);
 			}
 		);
-	};
 
-	inline std::shared_ptr<IToken> PatternParser::PPattern = OneOf(
-		CommonParser::Tokens{
-			PAlias,
-			PAny,
-			PCons,
-			PConst,
-			PNamed,
-			PDataConstructor,
-			PList,
-			PRecord,
-			PTuple,
-		},
-		CommonParser::PWS
-	);
+	private:
+		inline static ForwardDeclarationToken::Replacement PPatternReplacement{
+			PPattern,
+			C::Tokens{PAlias, PAny, PCons, PConst, PNamed, PDataConstructor, PList, PRecord, PTuple}
+		};
+	};
 }

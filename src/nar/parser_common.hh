@@ -149,10 +149,10 @@ namespace funcc::nar {
 		inline static std::shared_ptr<IToken> PInfixIdentifier = Map(
 			Entity(
 				[](std::string_view const& acc, uint32_t next, bool& outIsValid, bool& outIsComplete) {
-					outIsComplete = SmbIdentifier.find(next) == std::string_view::npos;
+					outIsComplete = SmbInfixIdentifier.find(next) == std::string_view::npos;
 
 					if (outIsComplete) {
-						outIsValid = !acc.empty() && (SmbIdentifierNotFirst.find(acc[0]) == std::string_view::npos);
+						outIsValid = !acc.empty();
 					}
 				},
 				PWS
@@ -164,32 +164,14 @@ namespace funcc::nar {
 		);
 
 		inline static std::shared_ptr<IToken> PWrappedInfixIdentifier = Map(
-			Entity(
-				[](std::string_view const& acc, uint32_t next, bool& outIsValid, bool& outIsComplete) {
-					outIsComplete = SmbIdentifier.find(next) == std::string_view::npos &&
-						SeqInfixOpen.find(next) == std::string_view::npos &&
-						SeqInfixClose.find(next) == std::string_view::npos;
-
-					if (outIsComplete) {
-						outIsValid = !acc.empty() && acc.find(SeqInfixOpen) == 0 &&
-							acc.find(SeqInfixClose) == acc.length() - SeqInfixClose.length() &&
-							acc.find(SeqInfixOpen, 1) == std::string_view::npos;
-					}
-				},
-				PWS
-			),
+			All(Tokens{Exact(SeqInfixOpen, PWS), PInfixIdentifier, Exact(SeqInfixClose, PWS)}, PWS),
 			[](std::shared_ptr<ITokenValue> const& value) -> std::shared_ptr<ITokenValue> {
-				std::string_view acc = std::dynamic_pointer_cast<SimpleValue>(value)->GetValue();
-				return std::make_shared<InfixIdentifierValue>(value->GetRange(), acc.substr(1, acc.length() - 2));
+				Values mv = std::dynamic_pointer_cast<MultiValue>(value)->GetValues();
+				return std::make_shared<InfixIdentifierValue>(
+					value->GetRange(),
+					std::dynamic_pointer_cast<InfixIdentifierValue>(mv[1])->GetValue()
+				);
 			}
-		);
-
-		inline static std::shared_ptr<IToken> PTypeParameters = Some(
-			PIdentifier,
-			Exact(SeqTypeParametersOpen, PWS),
-			Exact(SeqTypeParametersClose, PWS),
-			Exact(SeqTypeParametersSep, PWS),
-			PWS
 		);
 
 		inline static std::shared_ptr<IToken> PConstChar = Map(

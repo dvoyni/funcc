@@ -9,6 +9,13 @@
 		m_ignoreWS->Consume(reader); \
 	}
 
+#define FUNCC_DEBUG_TOKEN ""
+
+#define FUNCC_DEBUG_TOKEN_BREAK(name)           \
+	if (strcmp(name, FUNCC_DEBUG_TOKEN) == 0) { \
+		__debugbreak();                         \
+	}
+
 namespace funcc::parser {
 	enum class ValueKind {
 		Error,
@@ -64,10 +71,6 @@ namespace funcc::parser {
 		ErrorValue() :
 			ITokenValue{ValueKind::Error, Range{}},
 			m_message{} {};
-
-		ErrorValue(Location start, IReader& reader, std::string&& message) :
-			ITokenValue{ValueKind::Error, Range{std::move(start), reader.Pop()}},
-			m_message{std::move(message)} {}
 
 		ErrorValue(Range range, std::string&& message) :
 			ITokenValue{ValueKind::Error, std::move(range)},
@@ -193,6 +196,13 @@ namespace funcc::parser {
 	public:
 		virtual ~IToken() = default;
 		virtual std::shared_ptr<ITokenValue> Consume(IReader& reader) const = 0;
+
+	protected:
+		std::shared_ptr<ITokenValue> RewindWithError(Location start, IReader& reader, std::string_view message) const {
+			Range range{start, reader.GetLocation()};
+			reader.SetLocation(start);
+			return std::make_shared<ErrorValue>(range, std::string(message));
+		}
 	};
 
 	class ExactToken : public IToken {
@@ -207,12 +217,13 @@ namespace funcc::parser {
 		~ExactToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
 			skipWs();
-			Location start = reader.Push();
+
 			size_t length = m_target.length();
 			for (size_t i = 0; i < length; ++i) {
 				if (reader.GetChar() != m_target[i] || !reader.Move()) {
-					return std::make_shared<ErrorValue>(
+					return RewindWithError(
 						start,
 						reader,
 						std::string("Expected '") + std::string(m_target) + std::string("'")  // TODO: make it better?
@@ -243,8 +254,8 @@ namespace funcc::parser {
 		~IgnoreAnyToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
-			skipWs();
 			Location start = reader.GetLocation();
+			skipWs();
 
 			bool consumed = true;
 			while (consumed) {
@@ -281,17 +292,22 @@ namespace funcc::parser {
 		~OneOfToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
-			std::shared_ptr<ITokenValue> furthestError{};
+			Location start = reader.GetLocation();
 			skipWs();
+
+			std::shared_ptr<ITokenValue> furthestError{};
+
 			for (auto& token: m_tokens) {
 				std::shared_ptr<ITokenValue> result = token->Consume(reader);
-				if (result) {
+				if (result->HasValue()) {
 					return result;
 				}
 				if (!furthestError || furthestError->GetRange() < result->GetRange()) {
 					furthestError = result;
 				}
 			}
+
+			reader.SetLocation(start);
 			return furthestError;
 		}
 	};
@@ -325,12 +341,14 @@ namespace funcc::parser {
 		~AllToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
+
 			std::vector<std::shared_ptr<ITokenValue>> results{};
-			Location start = reader.Push();
+
 			for (auto& token: m_tokens) {
 				std::shared_ptr<ITokenValue> result = token->Consume(reader);
 				if (!result->HasValue()) {
-					reader.Pop();
+					reader.SetLocation(start);
 					return result;
 				}
 
@@ -368,11 +386,16 @@ namespace funcc::parser {
 		~OptionalToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
-			Location start = reader.Push();
+			Location start = reader.GetLocation();
+
 			std::shared_ptr<ITokenValue> result = m_token->Consume(reader);
 			if (result->HasError()) {
 				if (m_alternative) {
-					return m_alternative->Consume(reader);
+					std::shared_ptr<ITokenValue> altValue = m_alternative->Consume(reader);
+					if (altValue->HasError()) {
+						reader.SetLocation(start);
+					}
+					return altValue;
 				}
 				return std::make_shared<SimpleValue>(ValueKind::SkippedOptional, reader.GetLocation(), reader);
 			}
@@ -380,11 +403,10 @@ namespace funcc::parser {
 				return result;
 			}
 			std::shared_ptr<ITokenValue> value = m_dependent->Consume(reader);
-			return std::make_shared<MultiValue>(
-				start,
-				reader,
-				std::vector<std::shared_ptr<ITokenValue>>{result, value}
-			);
+			if (value->HasError()) {
+				reader.SetLocation(start);
+			}
+			return value;
 		}
 	};
 
@@ -398,11 +420,11 @@ namespace funcc::parser {
 
 	class SomeToken : public IToken {
 		std::shared_ptr<IToken> m_item;
-		std::shared_ptr<IToken> m_firstItem;
 		std::shared_ptr<IToken> m_prefix;
 		std::shared_ptr<IToken> m_suffix;
 		std::shared_ptr<IToken> m_separator;
 		std::shared_ptr<IToken> m_ignoreWS;
+		std::shared_ptr<IToken> m_firstItem;
 		bool m_allowEmpty;
 		bool m_allowSeparatorBeforeSuffix;
 
@@ -417,24 +439,25 @@ namespace funcc::parser {
 			bool allowEmpty = false,
 			bool allowSeparatorBeforeSuffix = false
 		) :
-			m_item{item},
-			m_firstItem{firstItem ? std::move(firstItem) : std::move(item)},
+			m_item{std::move(item)},
 			m_prefix{std::move(prefix)},
 			m_suffix{std::move(suffix)},
 			m_separator{std::move(separator)},
 			m_ignoreWS{std::move(ignoreWS)},
+			m_firstItem{std::move(firstItem)},
 			m_allowEmpty{allowEmpty},
 			m_allowSeparatorBeforeSuffix{allowSeparatorBeforeSuffix} {}
 
 		~SomeToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
 			skipWs();
-			Location start = reader.Push();
+
 			if (m_prefix) {
 				std::shared_ptr<ITokenValue> prefix = m_prefix->Consume(reader);
-				if (!prefix->HasError()) {
-					reader.Pop();
+				if (prefix->HasError()) {
+					reader.SetLocation(start);
 					return prefix;
 				}
 			}
@@ -457,9 +480,9 @@ namespace funcc::parser {
 				}
 
 				skipWs();
-				std::shared_ptr<ITokenValue> item = (first ? m_firstItem : m_item)->Consume(reader);
+				std::shared_ptr<ITokenValue> item = ((first && m_firstItem) ? m_firstItem : m_item)->Consume(reader);
 				if (item->HasError()) {
-					reader.Pop();
+					reader.SetLocation(start);
 					return item;
 				}
 
@@ -514,18 +537,20 @@ namespace funcc::parser {
 		~RepeatToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
 			skipWs();
-			Location start = reader.Push();
+
 			std::vector<std::shared_ptr<ITokenValue>> values{};
 			while (true) {
+				Location itemStart = reader.GetLocation();
 				skipWs();
-				reader.Push();
+
 				std::shared_ptr<ITokenValue> condition = m_condition->Consume(reader);
-				reader.Pop();
+				reader.SetLocation(itemStart);
 
 				if (condition->HasError()) {
 					if (!m_allowEmpty && values.empty()) {
-						reader.Pop();
+						reader.SetLocation(start);
 						return condition;
 					}
 					break;
@@ -533,7 +558,7 @@ namespace funcc::parser {
 				skipWs();
 				std::shared_ptr<ITokenValue> body = m_body->Consume(reader);
 				if (body->HasError()) {
-					reader.Pop();
+					reader.SetLocation(start);
 					return body;
 				}
 				values.push_back(body);
@@ -558,7 +583,8 @@ namespace funcc::parser {
 		~WhiteSpaceToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
-			Location start = reader.Push();
+			Location start = reader.GetLocation();
+
 			while (true) {
 				uint32_t c = reader.GetChar();
 				if (!std::isspace(c) || !reader.Move()) {
@@ -568,7 +594,7 @@ namespace funcc::parser {
 			if (start < reader.GetLocation()) {
 				return std::make_shared<SimpleValue>(ValueKind::WhiteSpace, start, reader);
 			}
-			return std::make_shared<ErrorValue>(start, reader, "Expected whitespace");
+			return RewindWithError(start, reader, "Expected whitespace");
 		}
 	};
 
@@ -586,12 +612,13 @@ namespace funcc::parser {
 		~SingleLineCommentToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
+
 			ErrorValue ignore{};
-			Location start = reader.Push();
 
 			std::shared_ptr<ITokenValue> prefix = m_prefix.Consume(reader);
 			if (prefix->HasError()) {
-				reader.Pop();
+				reader.SetLocation(start);
 				return prefix;
 			}
 
@@ -622,10 +649,11 @@ namespace funcc::parser {
 		~MultiLineCommentToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
-			Location start = reader.Push();
+			Location start = reader.GetLocation();
+
 			std::shared_ptr<ITokenValue> prefix = m_prefix.Consume(reader);
 			if (prefix->HasError()) {
-				reader.Pop();
+				reader.SetLocation(start);
 				return prefix;
 			}
 
@@ -635,7 +663,7 @@ namespace funcc::parser {
 					break;
 				}
 				if (!reader.Move()) {
-					reader.Pop();
+					reader.SetLocation(start);
 					return suffix;
 				}
 			}
@@ -667,8 +695,9 @@ namespace funcc::parser {
 		~EntityToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
 			skipWs();
-			Location start = reader.Push();
+
 			while (true) {
 				uint32_t c = reader.GetChar();
 				bool isValid = false;
@@ -678,11 +707,11 @@ namespace funcc::parser {
 					if (isValid) {
 						return std::make_shared<SimpleValue>(ValueKind::Entity, start, reader);
 					} else {
-						return std::make_shared<ErrorValue>(start, reader, "Invalid identifier");
+						return RewindWithError(start, reader, "Invalid identifier");
 					}
 				}
 				if (!reader.Move()) {
-					return std::make_shared<ErrorValue>(start, reader, "Invalid identifier");
+					return RewindWithError(start, reader, "Invalid identifier");
 				}
 			}
 		}
@@ -712,10 +741,11 @@ namespace funcc::parser {
 		~StringLiteralToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
-			Location start = reader.Push();
+			Location start = reader.GetLocation();
+
 			std::shared_ptr<ITokenValue> result = m_prefix.Consume(reader);
 			if (result->HasError()) {
-				reader.Pop();
+				reader.SetLocation(start);
 				return result;
 			}
 
@@ -731,7 +761,7 @@ namespace funcc::parser {
 					break;
 				}
 				if (!reader.Move()) {
-					reader.Pop();
+					reader.SetLocation(start);
 					return suffix;
 				}
 			}
@@ -764,21 +794,21 @@ namespace funcc::parser {
 		~NumberLiteralToken() override = default;
 
 		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			Location start = reader.GetLocation();
 			skipWs();
-			Location start = reader.Push();
 
 			char const* begin = reader.Sub(Range{reader.GetLocation(), reader.GetLocation()}).data();
 			char* end = nullptr;
 			double val = strtod(begin, &end);
 
 			if (val == HUGE_VAL || end == begin) {
-				return std::make_shared<ErrorValue>(start, reader, "Expected number");
+				return RewindWithError(start, reader, "Expected number");
 			}
 
 			size_t len = end - begin;
 			while (len--) {
 				if (!reader.Move()) {
-					return std::make_shared<ErrorValue>(start, reader, "Expected number");
+					return RewindWithError(start, reader, "Expected number");
 				}
 			}
 
@@ -832,11 +862,76 @@ namespace funcc::parser {
 			if (reader.GetChar() == 0) {
 				return std::make_shared<SimpleValue>(ValueKind::WhiteSpace, reader.GetLocation(), reader);
 			}
-			return std::make_shared<ErrorValue>(reader.GetLocation(), reader, "Expected end of file");
+			return RewindWithError(reader.GetLocation(), reader, "Expected end of file");
 		}
 	};
 
 	inline static std::shared_ptr<IToken> Eof(std::shared_ptr<IToken> ignoreWS) {
 		return std::make_shared<EOFToken>(std::move(ignoreWS));
+	}
+
+	class DebugToken : public IToken {
+		std::shared_ptr<IToken> m_token;
+		std::string m_name;
+
+	public:
+		DebugToken(std::shared_ptr<IToken> token, std::string name) :
+			m_token{std::move(token)},
+			m_name{std::move(name)} {}
+
+		~DebugToken() override = default;
+
+		__forceinline std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+#ifdef FUNCC_DEBUG_TOKEN
+			FUNCC_DEBUG_TOKEN_BREAK(m_name.c_str());
+#endif
+			return m_token->Consume(reader);
+		}
+	};
+
+	inline static std::shared_ptr<IToken> Debug(std::shared_ptr<IToken> token, std::string name = "") {
+		return std::make_shared<DebugToken>(std::move(token), std::move(name));
+	}
+
+	class ForwardDeclarationToken : public IToken {
+		std::vector<std::shared_ptr<IToken>> m_token{};
+		mutable int m_recursionDepth{0};
+
+	public:
+		class Replacement {
+		public:
+			Replacement(std::shared_ptr<IToken> target, std::vector<std::shared_ptr<IToken>> replacement) {
+				std::dynamic_pointer_cast<ForwardDeclarationToken>(target)->m_token = std::move(replacement);
+			}
+		};
+
+		~ForwardDeclarationToken() override = default;
+
+		std::shared_ptr<ITokenValue> Consume(IReader& reader) const override {
+			m_recursionDepth++;
+			if (m_recursionDepth > 256) {
+				return std::make_shared<ErrorValue>(
+					Range{reader.GetLocation(), reader.GetLocation()},
+					"Forward declaration recursion limit exceeded"
+				);
+			}
+
+			std::shared_ptr<ITokenValue> result{};
+			for (auto& token: m_token) {
+				result = token->Consume(reader);
+				if (result->HasValue()) {
+					break;
+				}
+			}
+
+			m_recursionDepth--;
+			return result;
+		}
+
+		friend class Replacement;
+	};
+
+	inline static std::shared_ptr<IToken> ForwardDeclaration() {
+		return std::make_shared<ForwardDeclarationToken>();
 	}
 }
